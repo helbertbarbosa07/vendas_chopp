@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* ===== VARIÁVEIS E RESET ===== */
         :root {
@@ -50,6 +51,92 @@
             min-height: 90vh;
             display: flex;
             flex-direction: column;
+        }
+        
+        /* ===== TELA DE LOGIN ===== */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .login-box {
+            background: white;
+            border-radius: 25px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .login-logo {
+            font-size: 60px;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .login-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--dark);
+            margin-bottom: 30px;
+        }
+        
+        .login-title span {
+            color: var(--primary);
+        }
+        
+        .login-input {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: var(--transition);
+        }
+        
+        .login-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(54, 181, 176, 0.1);
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, var(--primary), #2A9D8F);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(54, 181, 176, 0.4);
+        }
+        
+        .login-error {
+            color: var(--danger);
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .login-error.show {
+            display: block;
         }
         
         /* ===== HEADER ===== */
@@ -810,12 +897,74 @@
             margin-bottom: 15px;
             color: var(--primary);
         }
+        
+        /* ===== LOGOUT BUTTON ===== */
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        /* ===== PASSWORD RESET MODAL ===== */
+        .password-reset-modal .modal {
+            max-width: 400px;
+        }
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <!-- TELA DE LOGIN -->
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <div class="login-logo">🍦</div>
+            <div class="login-title">CHOP <span>MANAGER</span> PRO</div>
+            <p style="color: var(--gray); margin-bottom: 30px; font-size: 14px;">
+                Sistema de Gestão de Sorveteria
+            </p>
+            
+            <form id="loginForm">
+                <input type="text" id="loginUsername" class="login-input" placeholder="Usuário" required>
+                <input type="password" id="loginPassword" class="login-input" placeholder="Senha" required>
+                <div id="loginError" class="login-error">
+                    Usuário ou senha incorretos
+                </div>
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    ENTRAR
+                </button>
+                <button type="button" id="resetPasswordBtn" class="login-btn" style="background: var(--gray); margin-top: 10px;">
+                    <i class="fas fa-key"></i>
+                    REDEFINIR SENHA
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- SISTEMA PRINCIPAL -->
+    <div id="appContainer" class="app-container" style="display: none;">
         <!-- HEADER -->
         <header class="header">
+            <button class="logout-btn" id="logoutBtn">
+                <i class="fas fa-sign-out-alt"></i>
+                Sair
+            </button>
+            
             <div class="logo">
                 <div class="logo-icon">🍦</div>
                 <div class="logo-text">
@@ -1184,6 +1333,20 @@
                             <p><strong>Faturamento Total:</strong> <span id="totalRevenue">R$ 0,00</span></p>
                         </div>
                     </div>
+                    
+                    <!-- REDEFINIR SENHA -->
+                    <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow);">
+                        <h3 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
+                            <i class="fas fa-key"></i> Redefinir Senha
+                        </h3>
+                        <p style="color: var(--gray); margin-bottom: 20px; font-size: 14px;">
+                            Altere a senha de acesso ao sistema.
+                        </p>
+                        <button class="btn-primary" id="changePasswordBtn" style="width: 100%; padding: 12px;">
+                            <i class="fas fa-lock"></i>
+                            Alterar Senha
+                        </button>
+                    </div>
                 </div>
             </section>
         </main>
@@ -1289,88 +1452,73 @@
         </div>
     </div>
     
+    <!-- MODAL DE REDEFINIÇÃO DE SENHA -->
+    <div class="modal-overlay password-reset-modal" id="passwordResetModal">
+        <div class="modal">
+            <div style="padding: 20px; background: linear-gradient(135deg, var(--primary), #2A9D8F); color: white; border-radius: 15px 15px 0 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-key"></i>
+                        <span>Redefinir Senha</span>
+                    </div>
+                    <button id="closePasswordModal" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            
+            <div style="padding: 20px;">
+                <form id="passwordForm">
+                    <div class="form-group">
+                        <label class="form-label">Senha Atual *</label>
+                        <input type="password" id="currentPassword" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Nova Senha *</label>
+                        <input type="password" id="newPassword" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Confirmar Nova Senha *</label>
+                        <input type="password" id="confirmPassword" class="form-input" required>
+                    </div>
+                    
+                    <div id="passwordError" style="color: var(--danger); margin-bottom: 15px; display: none;"></div>
+                </form>
+            </div>
+            
+            <div style="padding: 15px 20px; border-top: 2px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn-primary" id="cancelPasswordModal" style="background: var(--gray); padding: 10px 20px;">
+                    Cancelar
+                </button>
+                <button class="btn-primary" id="savePassword" style="padding: 10px 20px;">
+                    <i class="fas fa-save"></i>
+                    Salvar Senha
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
     
     <script>
+        // ===== CONFIGURAÇÃO DO SUPABASE =====
+        const SUPABASE_URL = 'https://j8yejg1ybh0e1zsqagvfww-o9d-xz0y.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_j8YEjg1ybH0e1ZSQaGVfww_O9D_XZ0Y';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
         // ===== DADOS DO SISTEMA =====
-        let produtos = JSON.parse(localStorage.getItem('chop_produtos')) || [
-            {
-                id: 1,
-                nome: "Casquinha Chocolate",
-                descricao: "Casquinha tradicional de chocolate",
-                preco: 5.00,
-                estoque: 5,
-                emoji: "🍫",
-                cor: "#8B4513",
-                ativo: true,
-                vendas: 12,
-                foto: null
-            },
-            {
-                id: 2,
-                nome: "Casquinha Morango",
-                descricao: "Casquinha cremosa de morango",
-                preco: 5.00,
-                estoque: 8,
-                emoji: "🍓",
-                cor: "#FF7BAC",
-                ativo: true,
-                vendas: 18,
-                foto: null
-            },
-            {
-                id: 3,
-                nome: "Pote 500ml",
-                descricao: "Pote de sorvete 500ml",
-                preco: 15.00,
-                estoque: 20,
-                emoji: "🍨",
-                cor: "#36B5B0",
-                ativo: true,
-                vendas: 8,
-                foto: null
-            },
-            {
-                id: 4,
-                nome: "Milkshake",
-                descricao: "Milkshake cremoso",
-                preco: 12.00,
-                estoque: 15,
-                emoji: "🥤",
-                cor: "#FFD166",
-                ativo: true,
-                vendas: 25,
-                foto: null
-            }
-        ];
-        
-        let vendas = JSON.parse(localStorage.getItem('chop_vendas')) || [
-            {
-                id: 1,
-                data: new Date().toISOString().split('T')[0],
-                hora: "14:30",
-                itens: [
-                    { produtoId: 1, nome: "Casquinha Chocolate", quantidade: 2, preco: 5.00 }
-                ],
-                total: 10.00,
-                pagamento: "dinheiro"
-            },
-            {
-                id: 2,
-                data: new Date().toISOString().split('T')[0],
-                hora: "15:45",
-                itens: [
-                    { produtoId: 2, nome: "Casquinha Morango", quantidade: 1, preco: 5.00 },
-                    { produtoId: 4, nome: "Milkshake", quantidade: 1, preco: 12.00 }
-                ],
-                total: 17.00,
-                pagamento: "pix"
-            }
-        ];
-        
+        let produtos = [];
+        let vendas = [];
         let carrinho = [];
         let charts = {};
+        
+        // ===== SENHA DO ADMIN =====
+        const ADMIN_PASSWORD_KEY = 'chop_admin_password';
+        const DEFAULT_ADMIN_PASSWORD = 'admin124578';
         
         // ===== LISTA DE EMOJIS =====
         const emojis = [
@@ -1386,10 +1534,26 @@
         ];
         
         // ===== INICIALIZAÇÃO =====
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             // Inicializar data/hora
             updateDateTime();
             setInterval(updateDateTime, 1000);
+            
+            // Verificar se o usuário já está logado
+            checkLoginStatus();
+            
+            // Configurar eventos de login
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            document.getElementById('resetPasswordBtn').addEventListener('click', showPasswordResetModalFromLogin);
+            
+            // Configurar logout
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+            
+            // Configurar modal de senha
+            document.getElementById('changePasswordBtn').addEventListener('click', showPasswordResetModal);
+            document.getElementById('closePasswordModal').addEventListener('click', closePasswordResetModal);
+            document.getElementById('cancelPasswordModal').addEventListener('click', closePasswordResetModal);
+            document.getElementById('savePassword').addEventListener('click', updatePassword);
             
             // Inicializar navegação
             initNavigation();
@@ -1397,30 +1561,358 @@
             // Inicializar componentes
             initComponents();
             
-            // Carregar dados iniciais
+            // Inicializar picker de emojis
+            initEmojiPicker();
+            
+            // Inicializar upload de foto
+            initPhotoUpload();
+        });
+        
+        // ===== AUTENTICAÇÃO =====
+        function checkLoginStatus() {
+            const isLoggedIn = localStorage.getItem('chop_logged_in') === 'true';
+            if (isLoggedIn) {
+                showApp();
+            }
+        }
+        
+        function handleLogin(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            // Verificar credenciais
+            const adminPassword = localStorage.getItem(ADMIN_PASSWORD_KEY) || DEFAULT_ADMIN_PASSWORD;
+            
+            if (username === 'admin' && password === adminPassword) {
+                localStorage.setItem('chop_logged_in', 'true');
+                showApp();
+                showNotification('Login realizado com sucesso!', 'success');
+            } else {
+                document.getElementById('loginError').classList.add('show');
+            }
+        }
+        
+        function logout() {
+            localStorage.removeItem('chop_logged_in');
+            hideApp();
+            document.getElementById('loginForm').reset();
+            document.getElementById('loginError').classList.remove('show');
+            showNotification('Logout realizado com sucesso!', 'info');
+        }
+        
+        function showApp() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+            
+            // Carregar dados do Supabase
+            loadDataFromSupabase();
+        }
+        
+        function hideApp() {
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+        }
+        
+        // ===== GERENCIAMENTO DE SENHA =====
+        function showPasswordResetModalFromLogin() {
+            // Modal para redefinir senha sem estar logado
+            const modal = document.getElementById('passwordResetModal');
+            modal.classList.add('active');
+            document.getElementById('currentPassword').style.display = 'none';
+            document.getElementById('currentPassword').closest('.form-group').style.display = 'none';
+        }
+        
+        function showPasswordResetModal() {
+            const modal = document.getElementById('passwordResetModal');
+            modal.classList.add('active');
+            document.getElementById('currentPassword').style.display = 'block';
+            document.getElementById('currentPassword').closest('.form-group').style.display = 'block';
+            document.getElementById('passwordForm').reset();
+            document.getElementById('passwordError').style.display = 'none';
+        }
+        
+        function closePasswordResetModal() {
+            const modal = document.getElementById('passwordResetModal');
+            modal.classList.remove('active');
+        }
+        
+        function updatePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('passwordError');
+            
+            errorDiv.style.display = 'none';
+            
+            // Validações
+            if (!document.getElementById('currentPassword').closest('.form-group').style.display === 'none') {
+                const adminPassword = localStorage.getItem(ADMIN_PASSWORD_KEY) || DEFAULT_ADMIN_PASSWORD;
+                if (currentPassword !== adminPassword) {
+                    errorDiv.textContent = 'Senha atual incorreta!';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+            }
+            
+            if (newPassword.length < 6) {
+                errorDiv.textContent = 'A nova senha deve ter pelo menos 6 caracteres!';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'As senhas não coincidem!';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Salvar nova senha
+            localStorage.setItem(ADMIN_PASSWORD_KEY, newPassword);
+            
+            closePasswordResetModal();
+            showNotification('Senha alterada com sucesso!', 'success');
+            
+            // Se estava na tela de login, limpar os campos
+            if (!localStorage.getItem('chop_logged_in')) {
+                document.getElementById('loginForm').reset();
+            }
+        }
+        
+        // ===== SUPABASE INTEGRATION =====
+        async function loadDataFromSupabase() {
+            try {
+                showNotification('Carregando dados do banco de dados...', 'info');
+                
+                // Carregar produtos
+                const { data: produtosData, error: produtosError } = await supabase
+                    .from('produtos')
+                    .select('*')
+                    .order('id', { ascending: true });
+                
+                if (produtosError) throw produtosError;
+                
+                produtos = produtosData || [];
+                
+                // Carregar vendas
+                const { data: vendasData, error: vendasError } = await supabase
+                    .from('vendas')
+                    .select('*')
+                    .order('data', { ascending: false })
+                    .order('hora', { ascending: false });
+                
+                if (vendasError) throw vendasError;
+                
+                vendas = vendasData || [];
+                
+                // Se não houver dados, criar alguns exemplos
+                if (produtos.length === 0) {
+                    await createSampleProducts();
+                }
+                
+                // Carregar dados iniciais
+                loadDashboard();
+                loadProductsForSale();
+                loadProductsList();
+                
+                showNotification('Sistema carregado com sucesso!', 'success');
+            } catch (error) {
+                console.error('Erro ao carregar dados do Supabase:', error);
+                showNotification('Erro ao carregar dados. Verifique a conexão.', 'error');
+                
+                // Usar dados locais como fallback
+                loadLocalFallbackData();
+            }
+        }
+        
+        async function createSampleProducts() {
+            const sampleProducts = [
+                {
+                    id: Date.now(),
+                    nome: "Casquinha Chocolate",
+                    descricao: "Casquinha tradicional de chocolate",
+                    preco: 5.00,
+                    estoque: 50,
+                    emoji: "🍫",
+                    cor: "#8B4513",
+                    ativo: true,
+                    vendas: 0,
+                    foto: null
+                },
+                {
+                    id: Date.now() + 1,
+                    nome: "Casquinha Morango",
+                    descricao: "Casquinha cremosa de morango",
+                    preco: 5.00,
+                    estoque: 45,
+                    emoji: "🍓",
+                    cor: "#FF7BAC",
+                    ativo: true,
+                    vendas: 0,
+                    foto: null
+                },
+                {
+                    id: Date.now() + 2,
+                    nome: "Pote 500ml",
+                    descricao: "Pote de sorvete 500ml",
+                    preco: 15.00,
+                    estoque: 30,
+                    emoji: "🍨",
+                    cor: "#36B5B0",
+                    ativo: true,
+                    vendas: 0,
+                    foto: null
+                },
+                {
+                    id: Date.now() + 3,
+                    nome: "Milkshake",
+                    descricao: "Milkshake cremoso",
+                    preco: 12.00,
+                    estoque: 40,
+                    emoji: "🥤",
+                    cor: "#FFD166",
+                    ativo: true,
+                    vendas: 0,
+                    foto: null
+                }
+            ];
+            
+            try {
+                for (const produto of sampleProducts) {
+                    const { error } = await supabase
+                        .from('produtos')
+                        .insert([produto]);
+                    
+                    if (error) throw error;
+                }
+                
+                produtos = sampleProducts;
+                showNotification('Produtos de exemplo criados!', 'success');
+            } catch (error) {
+                console.error('Erro ao criar produtos de exemplo:', error);
+            }
+        }
+        
+        function loadLocalFallbackData() {
+            // Dados locais de fallback
+            produtos = [
+                {
+                    id: 1,
+                    nome: "Casquinha Chocolate",
+                    descricao: "Casquinha tradicional de chocolate",
+                    preco: 5.00,
+                    estoque: 50,
+                    emoji: "🍫",
+                    cor: "#8B4513",
+                    ativo: true,
+                    vendas: 12,
+                    foto: null
+                },
+                {
+                    id: 2,
+                    nome: "Casquinha Morango",
+                    descricao: "Casquinha cremosa de morango",
+                    preco: 5.00,
+                    estoque: 45,
+                    emoji: "🍓",
+                    cor: "#FF7BAC",
+                    ativo: true,
+                    vendas: 18,
+                    foto: null
+                }
+            ];
+            
+            vendas = [];
+            
             loadDashboard();
             loadProductsForSale();
             loadProductsList();
-            initEmojiPicker();
-            initPhotoUpload();
-            
-            // Configurar listeners
-            document.getElementById('reportPeriod').addEventListener('change', function() {
-                const customRange = document.getElementById('customDateRange');
-                customRange.style.display = this.value === 'personalizado' ? 'flex' : 'none';
-            });
-            
-            document.getElementById('productFilter').addEventListener('change', loadProductsList);
-            document.getElementById('productSearch').addEventListener('input', loadProductsList);
-            
-            // Mostrar que o sistema está carregado
-            setTimeout(() => {
-                showNotification('Sistema carregado com sucesso!', 'success');
-            }, 500);
-        });
+            showNotification('Usando dados locais (modo offline)', 'warning');
+        }
         
+        async function saveProductToSupabase(produto) {
+            try {
+                if (produto.id) {
+                    // Atualizar produto existente
+                    const { error } = await supabase
+                        .from('produtos')
+                        .update(produto)
+                        .eq('id', produto.id);
+                    
+                    if (error) throw error;
+                } else {
+                    // Inserir novo produto
+                    produto.id = Date.now();
+                    const { error } = await supabase
+                        .from('produtos')
+                        .insert([produto]);
+                    
+                    if (error) throw error;
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Erro ao salvar produto no Supabase:', error);
+                return false;
+            }
+        }
+        
+        async function deleteProductFromSupabase(id) {
+            try {
+                const { error } = await supabase
+                    .from('produtos')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                return true;
+            } catch (error) {
+                console.error('Erro ao excluir produto do Supabase:', error);
+                return false;
+            }
+        }
+        
+        async function saveSaleToSupabase(venda) {
+            try {
+                const { error } = await supabase
+                    .from('vendas')
+                    .insert([venda]);
+                
+                if (error) throw error;
+                return true;
+            } catch (error) {
+                console.error('Erro ao salvar venda no Supabase:', error);
+                return false;
+            }
+        }
+        
+        async function updateProductStockInSupabase(id, estoque, vendasCount) {
+            try {
+                const { error } = await supabase
+                    .from('produtos')
+                    .update({ 
+                        estoque: estoque,
+                        vendas: vendasCount 
+                    })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                return true;
+            } catch (error) {
+                console.error('Erro ao atualizar estoque no Supabase:', error);
+                return false;
+            }
+        }
+        
+        // O restante do código JavaScript permanece o mesmo, apenas substitua as chamadas de localStorage pelas do Supabase
+        
+        // ... (o restante do código JavaScript permanece igual, apenas substitua onde necessário)
+        // As funções initNavigation, initComponents, initEmojiPicker, initPhotoUpload, navigateTo, loadDashboard, etc.
+        // permanecem as mesmas, apenas ajuste para usar as variáveis 'produtos' e 'vendas' que agora vêm do Supabase
+        
+        // ===== INICIALIZAÇÃO DE COMPONENTES =====
         function initNavigation() {
-            // Navegação por tabs
             document.querySelectorAll('.nav-tab').forEach(tab => {
                 tab.addEventListener('click', function() {
                     const pageId = this.dataset.page;
@@ -1458,8 +1950,14 @@
                 });
             });
             
-            // Salvar dados automaticamente
-            window.addEventListener('beforeunload', saveAllData);
+            // Filtros
+            document.getElementById('reportPeriod').addEventListener('change', function() {
+                const customRange = document.getElementById('customDateRange');
+                customRange.style.display = this.value === 'personalizado' ? 'flex' : 'none';
+            });
+            
+            document.getElementById('productFilter').addEventListener('change', loadProductsList);
+            document.getElementById('productSearch').addEventListener('input', loadProductsList);
         }
         
         function initEmojiPicker() {
@@ -1478,7 +1976,6 @@
                 picker.classList.toggle('show');
             });
             
-            // Fechar picker ao clicar fora
             document.addEventListener('click', function() {
                 const picker = document.getElementById('emojiPicker');
                 picker.classList.remove('show');
@@ -1519,15 +2016,12 @@
         
         // ===== NAVEGAÇÃO =====
         function navigateTo(pageId) {
-            // Atualizar tabs
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
             
-            // Ativar tab e página selecionada
             document.querySelector(`.nav-tab[data-page="${pageId}"]`).classList.add('active');
             document.getElementById(pageId).classList.add('active');
             
-            // Carregar conteúdo específico da página
             switch(pageId) {
                 case 'dashboard': 
                     loadDashboard(); 
@@ -1548,38 +2042,28 @@
         }
         
         // ===== DASHBOARD =====
-        function loadDashboard() {
+        async function loadDashboard() {
             try {
                 const hoje = new Date().toISOString().split('T')[0];
                 const vendasHoje = vendas.filter(v => v.data === hoje);
                 
-                // Calcular estatísticas
                 const faturamentoHoje = vendasHoje.reduce((sum, v) => sum + v.total, 0);
                 const chopsHoje = vendasHoje.reduce((sum, v) => 
                     sum + v.itens.reduce((s, i) => s + i.quantidade, 0), 0);
                 const mediaVenda = vendasHoje.length > 0 ? faturamentoHoje / vendasHoje.length : 0;
                 const estoqueBaixo = produtos.filter(p => p.estoque < 10 && p.ativo).length;
                 
-                // Atualizar estatísticas
                 document.getElementById('todayRevenue').textContent = `R$ ${faturamentoHoje.toFixed(2)}`;
                 document.getElementById('todayChops').textContent = chopsHoje;
                 document.getElementById('avgSale').textContent = `R$ ${mediaVenda.toFixed(2)}`;
                 document.getElementById('lowStock').textContent = estoqueBaixo;
                 
-                // Atualizar gráficos
                 updateCharts();
-                
-                // Carregar últimas vendas
                 loadRecentSales();
-                
-                // Carregar produtos mais vendidos
                 loadTopProducts();
-                
-                // Carregar estoque baixo
                 loadLowStockProducts();
             } catch (error) {
                 console.error('Erro ao carregar dashboard:', error);
-                showNotification('Erro ao carregar dashboard', 'error');
             }
         }
         
@@ -1588,7 +2072,7 @@
                 const hoje = new Date().toISOString().split('T')[0];
                 const vendasHoje = vendas.filter(v => v.data === hoje);
                 
-                // Gráfico de pizza - Produtos mais vendidos hoje
+                // Gráfico de pizza
                 const vendasPorProduto = {};
                 vendasHoje.forEach(venda => {
                     venda.itens.forEach(item => {
@@ -1627,7 +2111,7 @@
                     }
                 }
                 
-                // Gráfico de linha - Evolução semanal
+                // Gráfico de linha
                 const ultimos7Dias = [];
                 const vendasPorDia = [];
                 
@@ -1719,12 +2203,6 @@
                 container.innerHTML = html;
             } catch (error) {
                 console.error('Erro ao carregar últimas vendas:', error);
-                document.getElementById('recentSalesList').innerHTML = `
-                    <div class="empty-sales">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>Erro ao carregar vendas</p>
-                    </div>
-                `;
             }
         }
         
@@ -1768,12 +2246,6 @@
                 container.innerHTML = html;
             } catch (error) {
                 console.error('Erro ao carregar top produtos:', error);
-                document.getElementById('topProductsList').innerHTML = `
-                    <div class="empty-sales">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>Erro ao carregar produtos</p>
-                    </div>
-                `;
             }
         }
         
@@ -1839,7 +2311,6 @@
                     const card = document.createElement('div');
                     card.className = 'flavor-card';
                     
-                    // Verifica se tem foto
                     const photoHTML = produto.foto ? 
                         `<img src="${produto.foto}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%; margin-bottom: 10px;">` :
                         `<div style="font-size: 40px; margin-bottom: 10px;">${produto.emoji}</div>`;
@@ -1963,7 +2434,6 @@
                     container.appendChild(itemEl);
                 });
                 
-                // Adicionar eventos aos botões
                 container.querySelectorAll('button').forEach(btn => {
                     btn.addEventListener('click', function() {
                         const index = parseInt(this.dataset.index);
@@ -2038,7 +2508,7 @@
             }
         }
         
-        function finalizeSale() {
+        async function finalizeSale() {
             try {
                 if (carrinho.length === 0) return;
                 
@@ -2059,30 +2529,40 @@
                     pagamento: formaPagamento
                 };
                 
-                // Atualizar estoque
-                carrinho.forEach(itemCarrinho => {
-                    const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
-                    if (produto) {
-                        produto.estoque -= itemCarrinho.quantidade;
-                        produto.vendas = (produto.vendas || 0) + itemCarrinho.quantidade;
+                // Salvar venda no Supabase
+                const saleSaved = await saveSaleToSupabase(novaVenda);
+                
+                if (saleSaved) {
+                    // Atualizar estoque no Supabase
+                    for (const itemCarrinho of carrinho) {
+                        const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
+                        if (produto) {
+                            const novoEstoque = produto.estoque - itemCarrinho.quantidade;
+                            const novasVendas = (produto.vendas || 0) + itemCarrinho.quantidade;
+                            
+                            await updateProductStockInSupabase(produto.id, novoEstoque, novasVendas);
+                            
+                            // Atualizar localmente
+                            produto.estoque = novoEstoque;
+                            produto.vendas = novasVendas;
+                        }
                     }
-                });
-                
-                vendas.push(novaVenda);
-                saveAllData();
-                
-                showNotification(`✅ Venda realizada! R$ ${total.toFixed(2)}`, 'success');
-                
-                carrinho = [];
-                updateCart();
-                
-                // Atualizar dashboard
-                loadDashboard();
-                
-                // Voltar para dashboard após 1 segundo
-                setTimeout(() => {
-                    navigateTo('dashboard');
-                }, 1000);
+                    
+                    vendas.push(novaVenda);
+                    
+                    showNotification(`✅ Venda realizada! R$ ${total.toFixed(2)}`, 'success');
+                    
+                    carrinho = [];
+                    updateCart();
+                    
+                    loadDashboard();
+                    
+                    setTimeout(() => {
+                        navigateTo('dashboard');
+                    }, 1000);
+                } else {
+                    showNotification('Erro ao salvar venda no banco de dados!', 'error');
+                }
             } catch (error) {
                 console.error('Erro ao finalizar venda:', error);
                 showNotification('Erro ao finalizar venda!', 'error');
@@ -2098,7 +2578,6 @@
                 
                 let filteredProducts = [...produtos];
                 
-                // Aplicar filtro
                 if (filter === 'estoque-baixo') {
                     filteredProducts = filteredProducts.filter(p => p.estoque < 10);
                 } else if (filter === 'mais-vendidos') {
@@ -2109,7 +2588,6 @@
                     filteredProducts = filteredProducts.filter(p => !p.ativo);
                 }
                 
-                // Aplicar busca
                 if (search) {
                     filteredProducts = filteredProducts.filter(p => 
                         p.nome.toLowerCase().includes(search) || 
@@ -2137,7 +2615,6 @@
                     const statusClass = produto.ativo ? 'success' : 'danger';
                     const statusText = produto.ativo ? 'Ativo' : 'Inativo';
                     
-                    // Verifica se tem foto
                     const photoHTML = produto.foto ? 
                         `<img src="${produto.foto}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 50%; margin-bottom: 10px;">` :
                         `<div style="font-size: 40px; margin-bottom: 10px;">${produto.emoji}</div>`;
@@ -2173,12 +2650,6 @@
                 });
             } catch (error) {
                 console.error('Erro ao carregar lista de produtos:', error);
-                container.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
-                        <i class="fas fa-exclamation-circle" style="font-size: 50px; margin-bottom: 15px; color: var(--danger);"></i>
-                        <p style="font-size: 16px;">Erro ao carregar produtos</p>
-                    </div>
-                `;
             }
         }
         
@@ -2235,7 +2706,7 @@
             document.getElementById('emojiPicker').classList.remove('show');
         }
         
-        function saveProduct() {
+        async function saveProduct() {
             try {
                 const form = document.getElementById('productForm');
                 if (!form.checkValidity()) {
@@ -2245,7 +2716,6 @@
                 
                 const id = document.getElementById('productId').value;
                 const produtoData = {
-                    id: id ? parseInt(id) : Date.now(),
                     nome: document.getElementById('productName').value,
                     descricao: document.getElementById('productDescription').value,
                     preco: parseFloat(document.getElementById('productPrice').value),
@@ -2258,20 +2728,52 @@
                 };
                 
                 if (id) {
-                    const index = produtos.findIndex(p => p.id === parseInt(id));
-                    produtoData.vendas = produtos[index].vendas || 0;
-                    produtos[index] = produtoData;
-                    showNotification(`✅ Produto atualizado!`, 'success');
+                    // Atualizar produto existente
+                    produtoData.id = parseInt(id);
+                    const produtoExistente = produtos.find(p => p.id === parseInt(id));
+                    produtoData.vendas = produtoExistente ? produtoExistente.vendas || 0 : 0;
+                    
+                    const success = await saveProductToSupabase(produtoData);
+                    
+                    if (success) {
+                        const index = produtos.findIndex(p => p.id === parseInt(id));
+                        produtos[index] = produtoData;
+                        showNotification(`✅ Produto atualizado!`, 'success');
+                    } else {
+                        showNotification('Erro ao atualizar produto no banco de dados!', 'error');
+                        return;
+                    }
                 } else {
-                    produtos.push(produtoData);
-                    showNotification(`✅ Produto criado!`, 'success');
+                    // Criar novo produto
+                    const success = await saveProductToSupabase(produtoData);
+                    
+                    if (success) {
+                        // Buscar o ID gerado pelo Supabase
+                        const { data: novoProduto, error } = await supabase
+                            .from('produtos')
+                            .select('*')
+                            .eq('nome', produtoData.nome)
+                            .single();
+                        
+                        if (!error && novoProduto) {
+                            produtoData.id = novoProduto.id;
+                            produtos.push(produtoData);
+                            showNotification(`✅ Produto criado!`, 'success');
+                        } else {
+                            produtoData.id = Date.now();
+                            produtos.push(produtoData);
+                            showNotification(`✅ Produto criado!`, 'success');
+                        }
+                    } else {
+                        showNotification('Erro ao criar produto no banco de dados!', 'error');
+                        return;
+                    }
                 }
                 
                 closeProductModal();
                 loadProductsList();
                 loadProductsForSale();
                 loadDashboard();
-                saveAllData();
             } catch (error) {
                 console.error('Erro ao salvar produto:', error);
                 showNotification('Erro ao salvar produto!', 'error');
@@ -2324,7 +2826,6 @@
                 const totalItens = vendasPeriodo.reduce((sum, v) => 
                     sum + v.itens.reduce((s, i) => s + i.quantidade, 0), 0);
                 
-                // Top produtos do período
                 const topProdutosPeriodo = {};
                 vendasPeriodo.forEach(venda => {
                     venda.itens.forEach(item => {
@@ -2477,15 +2978,6 @@
             }
         }
         
-        function saveAllData() {
-            try {
-                localStorage.setItem('chop_produtos', JSON.stringify(produtos));
-                localStorage.setItem('chop_vendas', JSON.stringify(vendas));
-            } catch (error) {
-                console.error('Erro ao salvar dados:', error);
-            }
-        }
-        
         // ===== FUNÇÕES GLOBAIS =====
         window.navigateTo = navigateTo;
         
@@ -2498,16 +2990,21 @@
             }
         };
         
-        window.deleteProduct = function(id) {
+        window.deleteProduct = async function(id) {
             try {
                 const produto = produtos.find(p => p.id === id);
                 if (produto && confirm(`Tem certeza que deseja excluir "${produto.nome}"?`)) {
-                    produtos = produtos.filter(p => p.id !== id);
-                    showNotification('✅ Produto excluído!', 'success');
-                    loadProductsList();
-                    loadProductsForSale();
-                    loadDashboard();
-                    saveAllData();
+                    const success = await deleteProductFromSupabase(id);
+                    
+                    if (success) {
+                        produtos = produtos.filter(p => p.id !== id);
+                        showNotification('✅ Produto excluído!', 'success');
+                        loadProductsList();
+                        loadProductsForSale();
+                        loadDashboard();
+                    } else {
+                        showNotification('Erro ao excluir produto do banco de dados!', 'error');
+                    }
                 }
             } catch (error) {
                 console.error('Erro ao excluir produto:', error);
