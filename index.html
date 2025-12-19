@@ -8,8 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- Incluir Supabase JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* ===== VARIÁVEIS E RESET ===== */
         :root {
@@ -917,7 +915,7 @@
                     <div class="recent-sales-container">
                         <div class="sales-header">
                             <h3><i class="fas fa-history"></i> Últimas Vendas</h3>
-                            <button class="btn-primary" onclick="navigateTo('relatorios')" style="padding: 8px 15px; font-size: 12px;">
+                            <button class="btn-primary" id="btnVerTodas" style="padding: 8px 15px; font-size: 12px;">
                                 Ver Todas
                             </button>
                         </div>
@@ -931,7 +929,7 @@
                     <div class="top-products-container">
                         <div class="sales-header">
                             <h3><i class="fas fa-crown"></i> Top Produtos</h3>
-                            <button class="btn-primary" onclick="navigateTo('produtos')" style="padding: 8px 15px; font-size: 12px;">
+                            <button class="btn-primary" id="btnVerTodosProdutos" style="padding: 8px 15px; font-size: 12px;">
                                 Ver Todos
                             </button>
                         </div>
@@ -946,7 +944,7 @@
                 <div class="low-stock-container" id="lowStockContainer" style="display: none;">
                     <div class="sales-header">
                         <h3><i class="fas fa-exclamation-triangle"></i> Estoque Baixo</h3>
-                        <button class="btn-primary" onclick="navigateTo('produtos')" style="padding: 8px 15px; font-size: 12px; background: var(--warning);">
+                        <button class="btn-primary" id="btnReporEstoque" style="padding: 8px 15px; font-size: 12px; background: var(--warning);">
                             Repor Estoque
                         </button>
                     </div>
@@ -1297,8 +1295,8 @@
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
 
-  <script>
-    // ===== CONFIGURAÇÃO VERCEL =====
+   <script>
+    // ===== CONFIGURAÇÃO =====
     const API_URL = window.location.origin + '/api/neon';
     
     // ===== DADOS DO SISTEMA =====
@@ -1313,6 +1311,105 @@
         "🍦", "🍨", "🍧", "🍫", "🍓", "🍌", "🍇", "🍎", "🍉", "🍊",
         "🍋", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑"
     ];
+    
+    // ===== FUNÇÕES GLOBAIS =====
+    window.navigateTo = function(pageId) {
+        const tab = document.querySelector(`.nav-tab[data-page="${pageId}"]`);
+        if (tab) {
+            tab.click();
+        }
+    };
+    
+    window.addToCart = function(produtoId) {
+        const produto = produtos.find(p => p.id === produtoId);
+        if (!produto) {
+            showNotification('Produto não encontrado!', 'error');
+            return;
+        }
+        
+        if (produto.estoque <= 0) {
+            showNotification('Produto sem estoque!', 'error');
+            return;
+        }
+        
+        const existingItem = carrinho.find(item => item.produtoId === produtoId);
+        
+        if (existingItem) {
+            if (existingItem.quantidade >= produto.estoque) {
+                showNotification('Estoque insuficiente!', 'warning');
+                return;
+            }
+            existingItem.quantidade++;
+            existingItem.total = existingItem.quantidade * existingItem.preco;
+        } else {
+            carrinho.push({
+                produtoId: produto.id,
+                nome: produto.nome,
+                emoji: produto.emoji || '🍦',
+                preco: produto.preco,
+                quantidade: 1,
+                total: produto.preco
+            });
+        }
+        
+        updateCart();
+        showNotification(`${produto.emoji || '🍦'} ${produto.nome} adicionado!`, 'success');
+    };
+    
+    window.updateCartItem = function(index, change) {
+        const item = carrinho[index];
+        const produto = produtos.find(p => p.id === item.produtoId);
+        
+        if (!produto) return;
+        
+        const newQuantity = item.quantidade + change;
+        
+        if (newQuantity < 1) {
+            removeCartItem(index);
+            return;
+        }
+        
+        if (newQuantity > produto.estoque) {
+            showNotification('Estoque insuficiente!', 'warning');
+            return;
+        }
+        
+        item.quantidade = newQuantity;
+        item.total = item.quantidade * item.preco;
+        updateCart();
+    };
+    
+    window.removeCartItem = function(index) {
+        if (index >= 0 && index < carrinho.length) {
+            carrinho.splice(index, 1);
+            updateCart();
+            showNotification('Item removido do carrinho!', 'info');
+        }
+    };
+    
+    window.editProduct = function(id) {
+        const produto = produtos.find(p => p.id === id);
+        if (produto) openProductModal(produto);
+    };
+    
+    window.deleteProduct = async function(id) {
+        const produto = produtos.find(p => p.id === id);
+        if (produto && confirm(`Excluir "${produto.nome}"?`)) {
+            try {
+                if (dbOnline) {
+                    await neonQuery('DELETE FROM produtos WHERE id = $1', [id]);
+                }
+                produtos = produtos.filter(p => p.id !== id);
+                showNotification('✅ Produto excluído!', 'success');
+                loadProductsList();
+                loadProductsForSale();
+                loadDashboard();
+                saveAllData();
+            } catch (error) {
+                showNotification('Erro ao excluir!', 'error');
+            }
+        }
+    };
     
     // ===== FUNÇÕES DO NEON =====
     async function neonQuery(sql, params = []) {
@@ -1336,6 +1433,169 @@
         }
     }
     
+    // ===== INICIALIZAÇÃO =====
+    document.addEventListener('DOMContentLoaded', async function() {
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        
+        setupNavigation();
+        setupEventListeners();
+        initComponents();
+        
+        await tryConnectNeon();
+        
+        loadDashboard();
+        loadProductsForSale();
+        loadProductsList();
+        
+        showNotification('Sistema carregado!', 'success');
+    });
+    
+    function setupNavigation() {
+        const tabs = document.querySelectorAll('.nav-tab');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                const pageId = this.dataset.page;
+                
+                tabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                document.querySelectorAll('.page').forEach(page => {
+                    page.classList.remove('active');
+                });
+                
+                const targetPage = document.getElementById(pageId);
+                if (targetPage) {
+                    targetPage.classList.add('active');
+                    
+                    switch(pageId) {
+                        case 'dashboard':
+                            loadDashboard();
+                            break;
+                        case 'vendas':
+                            loadProductsForSale();
+                            break;
+                        case 'produtos':
+                            loadProductsList();
+                            break;
+                        case 'relatorios':
+                            loadReports();
+                            break;
+                        case 'config':
+                            loadConfig();
+                            break;
+                    }
+                }
+            });
+        });
+    }
+    
+    function setupEventListeners() {
+        // Carrinho
+        document.getElementById('clearCart')?.addEventListener('click', clearCart);
+        document.getElementById('finalizeSale')?.addEventListener('click', finalizeSale);
+        
+        // Produtos
+        document.getElementById('addProduct')?.addEventListener('click', () => openProductModal());
+        document.getElementById('productFilter')?.addEventListener('change', loadProductsList);
+        document.getElementById('productSearch')?.addEventListener('input', loadProductsList);
+        
+        // Botões de navegação
+        document.getElementById('btnVerTodas')?.addEventListener('click', () => navigateTo('relatorios'));
+        document.getElementById('btnVerTodosProdutos')?.addEventListener('click', () => navigateTo('produtos'));
+        document.getElementById('btnReporEstoque')?.addEventListener('click', () => navigateTo('produtos'));
+        
+        // Modal
+        document.getElementById('closeModal')?.addEventListener('click', closeProductModal);
+        document.getElementById('cancelModal')?.addEventListener('click', closeProductModal);
+        document.getElementById('saveProduct')?.addEventListener('click', saveProduct);
+        
+        // Filtros
+        document.getElementById('reportPeriod')?.addEventListener('change', function() {
+            const isCustom = this.value === 'personalizado';
+            document.getElementById('customDateRange').style.display = isCustom ? 'block' : 'none';
+        });
+        
+        document.getElementById('generateReportBtn')?.addEventListener('click', loadReports);
+        document.getElementById('printReport')?.addEventListener('click', printReport);
+        document.getElementById('backupBtn')?.addEventListener('click', backupData);
+        
+        // Upload de foto
+        document.getElementById('photoUploadContainer')?.addEventListener('click', () => {
+            document.getElementById('productPhoto').click();
+        });
+        
+        document.getElementById('productPhoto')?.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('photoPreview');
+                    preview.src = e.target.result;
+                    preview.classList.add('show');
+                    document.getElementById('productPhotoData').value = e.target.result;
+                };
+                reader.readAsDataURL(this.files[0]);
+            }
+        });
+    }
+    
+    function initComponents() {
+        // Inicializar emoji picker
+        const picker = document.getElementById('emojiPicker');
+        const selector = document.getElementById('emojiSelector');
+        
+        if (picker && selector) {
+            emojis.forEach(emoji => {
+                const div = document.createElement('div');
+                div.className = 'emoji-option';
+                div.textContent = emoji;
+                div.onclick = () => {
+                    document.getElementById('selectedEmoji').textContent = emoji;
+                    document.getElementById('productEmoji').value = emoji;
+                    picker.classList.remove('show');
+                };
+                picker.appendChild(div);
+            });
+            
+            selector.addEventListener('click', (e) => {
+                e.stopPropagation();
+                picker.classList.toggle('show');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!picker.contains(e.target) && !selector.contains(e.target)) {
+                    picker.classList.remove('show');
+                }
+            });
+        }
+        
+        // Inicializar seleção de pagamento
+        const paymentOptions = document.querySelectorAll('.payment-option input');
+        paymentOptions.forEach(option => {
+            option.addEventListener('change', function() {
+                document.querySelectorAll('.payment-card').forEach(card => {
+                    card.style.borderColor = '#dee2e6';
+                });
+                
+                if (this.checked) {
+                    this.closest('.payment-card').style.borderColor = '#4CAF50';
+                }
+            });
+        });
+    }
+    
+    async function tryConnectNeon() {
+        try {
+            const connected = await checkDatabase();
+            if (connected) {
+                await loadFromNeon();
+            }
+        } catch (error) {
+            console.log('Usando modo offline');
+        }
+    }
+    
     async function checkDatabase() {
         try {
             await neonQuery('SELECT NOW() as teste');
@@ -1351,7 +1611,7 @@
     
     async function loadFromNeon() {
         try {
-            if (!await checkDatabase()) return false;
+            if (!dbOnline) return false;
             
             // Carregar produtos
             const produtosData = await neonQuery('SELECT * FROM produtos ORDER BY nome');
@@ -1386,126 +1646,10 @@
                 pagamento: v.pagamento
             }));
             
-            // Salvar localmente como backup
             saveAllData();
-            
             return true;
         } catch (error) {
-            console.log('Usando dados locais');
             return false;
-        }
-    }
-    
-    async function saveProductToNeon(product) {
-        try {
-            if (product.id) {
-                await neonQuery(`
-                    UPDATE produtos 
-                    SET nome = $1, descricao = $2, preco = $3, estoque = $4, 
-                        emoji = $5, cor = $6, ativo = $7
-                    WHERE id = $8
-                `, [
-                    product.nome, product.descricao, product.preco, product.estoque,
-                    product.emoji, product.cor, product.ativo, product.id
-                ]);
-            } else {
-                const result = await neonQuery(`
-                    INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
-                    RETURNING id
-                `, [
-                    product.nome, product.descricao, product.preco, product.estoque,
-                    product.emoji, product.cor, product.ativo
-                ]);
-                product.id = result.rows[0].id;
-            }
-            return product;
-        } catch (error) {
-            throw error;
-        }
-    }
-    
-    async function saveSaleToNeon(sale) {
-        try {
-            const vendaResult = await neonQuery(`
-                INSERT INTO vendas (data, hora, total, pagamento)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id
-            `, [sale.data, sale.hora, sale.total, sale.pagamento]);
-            
-            const vendaId = vendaResult.rows[0].id;
-            
-            for (const item of sale.itens) {
-                await neonQuery(`
-                    INSERT INTO venda_itens (venda_id, produto_id, nome, quantidade, preco)
-                    VALUES ($1, $2, $3, $4, $5)
-                `, [vendaId, item.produtoId, item.nome, item.quantidade, item.preco]);
-                
-                await neonQuery(`
-                    UPDATE produtos 
-                    SET estoque = estoque - $1, vendas = vendas + $1
-                    WHERE id = $2
-                `, [item.quantidade, item.produtoId]);
-            }
-            
-            sale.id = vendaId;
-            return sale;
-        } catch (error) {
-            throw error;
-        }
-    }
-    
-    // ===== INICIALIZAÇÃO =====
-    document.addEventListener('DOMContentLoaded', async function() {
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
-        
-        initNavigation();
-        initComponents();
-        
-        // Tentar carregar do Neon
-        await loadFromNeon();
-        
-        // Carregar interface
-        loadDashboard();
-        loadProductsForSale();
-        loadProductsList();
-        
-        showNotification('Sistema carregado!', 'success');
-    });
-    
-    function initNavigation() {
-        document.querySelectorAll('.nav-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                const pageId = this.dataset.page;
-                navigateTo(pageId);
-            });
-        });
-    }
-    
-    function initComponents() {
-        document.getElementById('clearCart')?.addEventListener('click', clearCart);
-        document.getElementById('finalizeSale')?.addEventListener('click', finalizeSale);
-        document.getElementById('addProduct')?.addEventListener('click', () => openProductModal());
-        document.getElementById('closeModal')?.addEventListener('click', closeProductModal);
-        document.getElementById('cancelModal')?.addEventListener('click', closeProductModal);
-        document.getElementById('saveProduct')?.addEventListener('click', saveProduct);
-        
-        // Inicializar emoji picker
-        initEmojiPicker();
-    }
-    
-    function navigateTo(pageId) {
-        document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-        
-        document.querySelector(`.nav-tab[data-page="${pageId}"]`).classList.add('active');
-        document.getElementById(pageId).classList.add('active');
-        
-        switch(pageId) {
-            case 'dashboard': loadDashboard(); break;
-            case 'vendas': loadProductsForSale(); break;
-            case 'produtos': loadProductsList(); break;
         }
     }
     
@@ -1575,7 +1719,7 @@
                     <td>${venda.hora}</td>
                     <td>${totalItens} itens</td>
                     <td><strong>R$ ${venda.total.toFixed(2)}</strong></td>
-                    <td><span class="payment-badge ${pagamentoClass}">${venda.pagamento}</span></td>
+                    <td><span class="payment-badge ${pagamentoClass}">${venda.pagamento.toUpperCase()}</span></td>
                 </tr>
             `;
         });
@@ -1587,8 +1731,8 @@
     function loadTopProducts() {
         const topProductsList = document.getElementById('topProductsList');
         const produtosOrdenados = [...produtos]
-            .filter(p => p.vendas > 0)
-            .sort((a, b) => b.vendas - a.vendas)
+            .filter(p => (p.vendas || 0) > 0 && p.ativo)
+            .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
             .slice(0, 5);
         
         if (produtosOrdenados.length === 0) {
@@ -1604,14 +1748,15 @@
         let html = '<div class="top-products-list">';
         
         produtosOrdenados.forEach((produto, index) => {
+            const vendasCount = produto.vendas || 0;
             html += `
                 <div class="top-product-item">
-                    <div class="top-product-emoji">${produto.emoji}</div>
+                    <div class="top-product-emoji">${produto.emoji || '🍦'}</div>
                     <div class="top-product-info">
                         <div class="top-product-name">${produto.nome}</div>
                         <div class="top-product-stats">
-                            <span>${produto.vendas} vendas</span>
-                            <span>R$ ${(produto.preco * produto.vendas).toFixed(2)}</span>
+                            <span>${vendasCount} vendas</span>
+                            <span>R$ ${(produto.preco * vendasCount).toFixed(2)}</span>
                         </div>
                     </div>
                     <div class="top-product-rank">${index + 1}</div>
@@ -1639,7 +1784,7 @@
         produtosBaixoEstoque.slice(0, 6).forEach(produto => {
             html += `
                 <div class="low-stock-item">
-                    <div class="low-stock-emoji">${produto.emoji}</div>
+                    <div class="low-stock-emoji">${produto.emoji || '🍦'}</div>
                     <div class="low-stock-info">
                         <div class="low-stock-name">${produto.nome}</div>
                         <div class="low-stock-quantity">${produto.estoque} unidades restantes</div>
@@ -1680,7 +1825,7 @@
             html += `
                 <div class="flavor-card" onclick="addToCart(${produto.id})" 
                      style="border-color: ${produto.cor || '#36B5B0'};">
-                    <div style="font-size: 50px; margin-bottom: 15px;">${produto.emoji}</div>
+                    <div style="font-size: 50px; margin-bottom: 15px;">${produto.emoji || '🍦'}</div>
                     <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 10px; color: var(--dark);">
                         ${produto.nome}
                     </h3>
@@ -1701,37 +1846,6 @@
         
         productsGrid.innerHTML = html;
         updateCart();
-    }
-    
-    function addToCart(produtoId) {
-        const produto = produtos.find(p => p.id === produtoId);
-        if (!produto || produto.estoque <= 0) {
-            showNotification('Produto sem estoque!', 'error');
-            return;
-        }
-        
-        const existingItem = carrinho.find(item => item.produtoId === produtoId);
-        
-        if (existingItem) {
-            if (existingItem.quantidade >= produto.estoque) {
-                showNotification('Estoque insuficiente!', 'warning');
-                return;
-            }
-            existingItem.quantidade++;
-            existingItem.total = existingItem.quantidade * existingItem.preco;
-        } else {
-            carrinho.push({
-                produtoId: produto.id,
-                nome: produto.nome,
-                emoji: produto.emoji,
-                preco: produto.preco,
-                quantidade: 1,
-                total: produto.preco
-            });
-        }
-        
-        updateCart();
-        showNotification(`${produto.emoji} ${produto.nome} adicionado!`, 'success');
     }
     
     function updateCart() {
@@ -1784,12 +1898,12 @@
                     <td style="padding: 10px; text-align: center;">
                         <div style="display: inline-flex; align-items: center; background: #f8f9fa; border-radius: 8px; padding: 2px;">
                             <button onclick="updateCartItem(${index}, -1)" 
-                                    style="width: 30px; height: 30px; border: none; background: none; cursor: pointer;">
+                                    style="width: 30px; height: 30px; border: none; background: none; cursor: pointer; font-size: 12px;">
                                 <i class="fas fa-minus"></i>
                             </button>
-                            <span style="width: 40px; text-align: center;">${item.quantidade}</span>
+                            <span style="width: 40px; text-align: center; font-weight: 700;">${item.quantidade}</span>
                             <button onclick="updateCartItem(${index}, 1)" 
-                                    style="width: 30px; height: 30px; border: none; background: none; cursor: pointer;">
+                                    style="width: 30px; height: 30px; border: none; background: none; cursor: pointer; font-size: 12px;">
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
@@ -1799,7 +1913,7 @@
                     </td>
                     <td style="padding: 10px; text-align: center;">
                         <button onclick="removeCartItem(${index})" 
-                                style="background: var(--danger); color: white; border: none; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;">
+                                style="background: var(--danger); color: white; border: none; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 12px;">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1809,35 +1923,6 @@
         
         html += `</tbody></table>`;
         cartItems.innerHTML = html;
-    }
-    
-    function updateCartItem(index, change) {
-        const item = carrinho[index];
-        const produto = produtos.find(p => p.id === item.produtoId);
-        
-        if (!produto) return;
-        
-        const newQuantity = item.quantidade + change;
-        
-        if (newQuantity < 1) {
-            removeCartItem(index);
-            return;
-        }
-        
-        if (newQuantity > produto.estoque) {
-            showNotification('Estoque insuficiente!', 'warning');
-            return;
-        }
-        
-        item.quantidade = newQuantity;
-        item.total = item.quantidade * item.preco;
-        updateCart();
-    }
-    
-    function removeCartItem(index) {
-        carrinho.splice(index, 1);
-        updateCart();
-        showNotification('Item removido do carrinho!', 'info');
     }
     
     function clearCart() {
@@ -1852,7 +1937,10 @@
     
     async function finalizeSale() {
         try {
-            if (carrinho.length === 0) return;
+            if (carrinho.length === 0) {
+                showNotification('Carrinho vazio!', 'warning');
+                return;
+            }
             
             const formaPagamento = document.querySelector('input[name="payment"]:checked').value;
             const total = carrinho.reduce((sum, item) => sum + item.total, 0);
@@ -1911,6 +1999,36 @@
         }
     }
     
+    async function saveSaleToNeon(sale) {
+        try {
+            const vendaResult = await neonQuery(`
+                INSERT INTO vendas (data, hora, total, pagamento)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `, [sale.data, sale.hora, sale.total, sale.pagamento]);
+            
+            const vendaId = vendaResult.rows[0].id;
+            
+            for (const item of sale.itens) {
+                await neonQuery(`
+                    INSERT INTO venda_itens (venda_id, produto_id, nome, quantidade, preco)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [vendaId, item.produtoId, item.nome, item.quantidade, item.preco]);
+                
+                await neonQuery(`
+                    UPDATE produtos 
+                    SET estoque = estoque - $1, vendas = vendas + $1
+                    WHERE id = $2
+                `, [item.quantidade, item.produtoId]);
+            }
+            
+            sale.id = vendaId;
+            return sale;
+        } catch (error) {
+            throw error;
+        }
+    }
+    
     // ===== PRODUTOS =====
     function loadProductsList() {
         const productsList = document.getElementById('productsList');
@@ -1919,19 +2037,17 @@
         
         let produtosFiltrados = [...produtos];
         
-        // Aplicar filtros
         if (filter === 'estoque-baixo') {
             produtosFiltrados = produtosFiltrados.filter(p => p.estoque < 10);
         } else if (filter === 'mais-vendidos') {
-            produtosFiltrados = produtosFiltrados.filter(p => p.vendas > 0);
-            produtosFiltrados.sort((a, b) => b.vendas - a.vendas);
+            produtosFiltrados = produtosFiltrados.filter(p => (p.vendas || 0) > 0);
+            produtosFiltrados.sort((a, b) => (b.vendas || 0) - (a.vendas || 0));
         } else if (filter === 'ativos') {
-            produtosFiltrados = produtosFiltrados.filter(p => p.ativo);
+            produtosFiltrados = produtosFiltrados.filter(p => p.ativo !== false);
         } else if (filter === 'inativos') {
-            produtosFiltrados = produtosFiltrados.filter(p => !p.ativo);
+            produtosFiltrados = produtosFiltrados.filter(p => p.ativo === false);
         }
         
-        // Aplicar busca
         if (search) {
             produtosFiltrados = produtosFiltrados.filter(p => 
                 p.nome.toLowerCase().includes(search) ||
@@ -1939,18 +2055,12 @@
             );
         }
         
-        // Atualizar contadores
-        document.getElementById('totalProducts')?.textContent = produtos.length;
-        document.getElementById('totalSales')?.textContent = vendas.length;
-        const totalRevenue = vendas.reduce((sum, v) => sum + v.total, 0);
-        document.getElementById('totalRevenue')?.textContent = `R$ ${totalRevenue.toFixed(2)}`;
-        
         if (produtosFiltrados.length === 0) {
             productsList.innerHTML = `
                 <div class="empty-sales" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
                     <i class="fas fa-ice-cream" style="font-size: 50px; opacity: 0.3;"></i>
                     <p style="margin-top: 10px; color: var(--gray);">Nenhum produto encontrado</p>
-                    <button class="btn-primary" onclick="openProductModal()" style="margin-top: 15px;">
+                    <button class="btn-primary" onclick="navigateTo('produtos')" style="margin-top: 15px;">
                         <i class="fas fa-plus"></i> Adicionar Produto
                     </button>
                 </div>
@@ -1961,14 +2071,15 @@
         let html = '';
         produtosFiltrados.forEach(produto => {
             const estoqueStatus = produto.estoque < 10 ? 'style="color: var(--danger);"' : '';
-            const activeStatus = produto.ativo ? 'Ativo' : 'Inativo';
-            const activeClass = produto.ativo ? 'background: #e8f5e9; color: #2e7d32;' : 'background: #ffebee; color: #c62828;';
+            const activeStatus = produto.ativo !== false ? 'Ativo' : 'Inativo';
+            const activeClass = produto.ativo !== false ? 'background: #e8f5e9; color: #2e7d32;' : 'background: #ffebee; color: #c62828;';
+            const vendasCount = produto.vendas || 0;
             
             html += `
                 <div class="flavor-card" onclick="editProduct(${produto.id})" 
-                     style="border-color: ${produto.cor || '#36B5B0'};">
+                     style="border-color: ${produto.cor || '#36B5B0'}; cursor: pointer;">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                        <div style="font-size: 40px;">${produto.emoji}</div>
+                        <div style="font-size: 40px;">${produto.emoji || '🍦'}</div>
                         <span style="padding: 4px 10px; border-radius: 15px; font-size: 12px; ${activeClass}">
                             ${activeStatus}
                         </span>
@@ -1992,8 +2103,8 @@
                     </div>
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--gray);">
-                        <span><i class="fas fa-shopping-cart"></i> ${produto.vendas || 0} vendas</span>
-                        <span>R$ ${((produto.vendas || 0) * produto.preco).toFixed(2)}</span>
+                        <span><i class="fas fa-shopping-cart"></i> ${vendasCount} vendas</span>
+                        <span>R$ ${(vendasCount * produto.preco).toFixed(2)}</span>
                     </div>
                     
                     <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -2011,6 +2122,7 @@
         });
         
         productsList.innerHTML = html;
+        updateStatistics();
     }
     
     // ===== MODAL DE PRODUTO =====
@@ -2026,8 +2138,8 @@
             document.getElementById('productDescription').value = produto.descricao || '';
             document.getElementById('productPrice').value = produto.preco;
             document.getElementById('productStock').value = produto.estoque;
-            document.getElementById('productEmoji').value = produto.emoji;
-            document.getElementById('selectedEmoji').textContent = produto.emoji;
+            document.getElementById('productEmoji').value = produto.emoji || '🍦';
+            document.getElementById('selectedEmoji').textContent = produto.emoji || '🍦';
             document.getElementById('productColor').value = produto.cor || '#36B5B0';
             document.getElementById('productActive').checked = produto.ativo !== false;
         } else {
@@ -2103,62 +2215,47 @@
         }
     }
     
-    async function deleteProduct(id) {
-        const produto = produtos.find(p => p.id === id);
-        if (produto && confirm(`Excluir "${produto.nome}"?`)) {
-            try {
-                if (dbOnline) {
-                    await neonQuery('DELETE FROM produtos WHERE id = $1', [id]);
-                }
-                produtos = produtos.filter(p => p.id !== id);
-                showNotification('✅ Produto excluído!', 'success');
-                loadProductsList();
-                loadProductsForSale();
-                loadDashboard();
-                saveAllData();
-            } catch (error) {
-                showNotification('Erro ao excluir!', 'error');
+    async function saveProductToNeon(product) {
+        try {
+            if (product.id) {
+                await neonQuery(`
+                    UPDATE produtos 
+                    SET nome = $1, descricao = $2, preco = $3, estoque = $4, 
+                        emoji = $5, cor = $6, ativo = $7
+                    WHERE id = $8
+                `, [
+                    product.nome, product.descricao, product.preco, product.estoque,
+                    product.emoji, product.cor, product.ativo, product.id
+                ]);
+            } else {
+                const result = await neonQuery(`
+                    INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+                    RETURNING id
+                `, [
+                    product.nome, product.descricao, product.preco, product.estoque,
+                    product.emoji, product.cor, product.ativo
+                ]);
+                product.id = result.rows[0].id;
             }
+            return product;
+        } catch (error) {
+            throw error;
         }
     }
     
-    // ===== EMOJI PICKER =====
-    function initEmojiPicker() {
-        const picker = document.getElementById('emojiPicker');
-        const selector = document.getElementById('emojiSelector');
-        
-        // Preencher emojis
-        emojis.forEach(emoji => {
-            const div = document.createElement('div');
-            div.className = 'emoji-option';
-            div.textContent = emoji;
-            div.onclick = () => {
-                document.getElementById('selectedEmoji').textContent = emoji;
-                document.getElementById('productEmoji').value = emoji;
-                picker.classList.remove('show');
-            };
-            picker.appendChild(div);
-        });
-        
-        // Mostrar/ocultar picker
-        selector.addEventListener('click', (e) => {
-            e.stopPropagation();
-            picker.classList.toggle('show');
-        });
-        
-        document.addEventListener('click', (e) => {
-            if (!picker.contains(e.target) && !selector.contains(e.target)) {
-                picker.classList.remove('show');
-            }
-        });
+    // ===== FUNÇÕES ADICIONAIS =====
+    function updateStatistics() {
+        document.getElementById('totalProducts')?.textContent = produtos.length;
+        document.getElementById('totalSales')?.textContent = vendas.length;
+        const totalRevenue = vendas.reduce((sum, v) => sum + v.total, 0);
+        document.getElementById('totalRevenue')?.textContent = `R$ ${totalRevenue.toFixed(2)}`;
     }
     
-    // ===== GRÁFICOS =====
     function updateCharts() {
-        // Gráfico de produtos mais vendidos
         const produtosMaisVendidos = [...produtos]
-            .filter(p => p.vendas > 0)
-            .sort((a, b) => b.vendas - a.vendas)
+            .filter(p => (p.vendas || 0) > 0)
+            .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
             .slice(0, 5);
         
         const flavorsCtx = document.getElementById('flavorsChart');
@@ -2169,9 +2266,9 @@
                 charts.flavors = new Chart(flavorsCtx, {
                     type: 'doughnut',
                     data: {
-                        labels: produtosMaisVendidos.map(p => p.nome),
+                        labels: produtosMaisVendidos.map(p => p.nome.substring(0, 15) + (p.nome.length > 15 ? '...' : '')),
                         datasets: [{
-                            data: produtosMaisVendidos.map(p => p.vendas),
+                            data: produtosMaisVendidos.map(p => p.vendas || 0),
                             backgroundColor: produtosMaisVendidos.map(p => p.cor || '#36B5B0'),
                             borderWidth: 2
                         }]
@@ -2179,14 +2276,28 @@
                     options: {
                         responsive: true,
                         plugins: {
-                            legend: { position: 'bottom' }
+                            legend: { 
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            }
                         }
                     }
                 });
+            } else {
+                flavorsCtx.parentElement.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: var(--gray);">
+                        <i class="fas fa-chart-pie" style="font-size: 40px; opacity: 0.3;"></i>
+                        <p style="margin-top: 10px;">Sem dados de vendas</p>
+                    </div>
+                `;
             }
         }
         
-        // Gráfico semanal
         const weeklyCtx = document.getElementById('weeklyChart');
         if (weeklyCtx) {
             const hoje = new Date();
@@ -2238,7 +2349,152 @@
         }
     }
     
-    // ===== UTILITÁRIOS =====
+    function loadReports() {
+        const reportContent = document.getElementById('reportContent');
+        reportContent.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 40px; color: var(--primary);"></i>
+                <p style="margin-top: 10px; color: var(--gray);">Gerando relatório...</p>
+            </div>
+        `;
+        
+        setTimeout(() => {
+            const totalVendas = vendas.length;
+            const totalFaturamento = vendas.reduce((sum, v) => sum + v.total, 0);
+            const totalItensVendidos = vendas.reduce((sum, v) => 
+                sum + v.itens.reduce((s, i) => s + i.quantidade, 0), 0);
+            
+            reportContent.innerHTML = `
+                <div>
+                    <h3 style="color: var(--dark); margin-bottom: 20px; font-size: 24px;">
+                        <i class="fas fa-chart-bar"></i> Resumo Geral
+                    </h3>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Total Vendas</div>
+                            <div style="font-size: 32px; font-weight: 900; color: var(--primary);">${totalVendas}</div>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Faturamento Total</div>
+                            <div style="font-size: 32px; font-weight: 900; color: var(--success);">R$ ${totalFaturamento.toFixed(2)}</div>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Itens Vendidos</div>
+                            <div style="font-size: 32px; font-weight: 900; color: var(--secondary);">${totalItensVendidos}</div>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Produtos</div>
+                            <div style="font-size: 32px; font-weight: 900; color: var(--accent);">${produtos.length}</div>
+                        </div>
+                    </div>
+                    
+                    <h4 style="color: var(--dark); margin: 30px 0 15px 0;">Últimas Vendas</h4>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${generateSalesTable()}
+                    </div>
+                </div>
+            `;
+        }, 1000);
+    }
+    
+    function generateSalesTable() {
+        if (vendas.length === 0) {
+            return '<p style="text-align: center; color: var(--gray); padding: 20px;">Nenhuma venda registrada</p>';
+        }
+        
+        let html = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead>
+                    <tr style="background: #f8f9fa;">
+                        <th style="padding: 10px; text-align: left;">Data</th>
+                        <th style="padding: 10px; text-align: left;">Hora</th>
+                        <th style="padding: 10px; text-align: left;">Itens</th>
+                        <th style="padding: 10px; text-align: left;">Total</th>
+                        <th style="padding: 10px; text-align: left;">Pagamento</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        vendas.slice(0, 20).forEach(venda => {
+            const totalItens = venda.itens.reduce((sum, item) => sum + item.quantidade, 0);
+            html += `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">${venda.data}</td>
+                    <td style="padding: 10px;">${venda.hora}</td>
+                    <td style="padding: 10px;">${totalItens}</td>
+                    <td style="padding: 10px; font-weight: 700;">R$ ${venda.total.toFixed(2)}</td>
+                    <td style="padding: 10px;">
+                        <span style="padding: 2px 8px; border-radius: 10px; background: #e3f2fd; color: #1565c0; font-size: 12px;">
+                            ${venda.pagamento.toUpperCase()}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    }
+    
+    function loadConfig() {
+        updateStatistics();
+    }
+    
+    function printReport() {
+        const printContent = document.getElementById('reportContent').innerHTML;
+        const originalContent = document.body.innerHTML;
+        
+        document.body.innerHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Relatório Chop Manager</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { color: #333; }
+                    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+                <h1>Relatório Chop Manager PRO</h1>
+                <p>Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+                ${printContent}
+            </body>
+            </html>
+        `;
+        
+        window.print();
+        document.body.innerHTML = originalContent;
+        location.reload();
+    }
+    
+    function backupData() {
+        const backup = {
+            produtos: produtos,
+            vendas: vendas,
+            timestamp: new Date().toISOString(),
+            totalProdutos: produtos.length,
+            totalVendas: vendas.length,
+            totalFaturamento: vendas.reduce((sum, v) => sum + v.total, 0)
+        };
+        
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup_chopmanager_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('✅ Backup realizado com sucesso!', 'success');
+    }
+    
     function updateDateTime() {
         const now = new Date();
         const optionsDate = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -2260,19 +2516,6 @@
         localStorage.setItem('chop_produtos', JSON.stringify(produtos));
         localStorage.setItem('chop_vendas', JSON.stringify(vendas));
     }
-    
-    // ===== FUNÇÕES GLOBAIS =====
-    window.navigateTo = navigateTo;
-    window.addToCart = addToCart;
-    window.updateCartItem = updateCartItem;
-    window.removeCartItem = removeCartItem;
-    window.clearCart = clearCart;
-    window.editProduct = editProduct;
-    window.deleteProduct = deleteProduct;
-    
-    window.openProductModal = openProductModal;
-    window.closeProductModal = closeProductModal;
-    window.saveProduct = saveProduct;
 </script>
 </body>
 </html>
