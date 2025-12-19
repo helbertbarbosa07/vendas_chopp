@@ -2234,11 +2234,22 @@
         }
     }
     
-    // ===== FUNÇÕES ADICIONAIS =====
-    function updateStatistics() {
-    const totalProductsEl = document.getElementById('totalProducts');
-    const totalSalesEl = document.getElementById('totalSales');
-    const totalRevenueEl = document.getElementById('totalRevenue');
+async function updateStatistics() {
+    try {
+        const response = await fetch("/api/dashboard");
+        const data = await response.json();
+
+        document.getElementById("totalProducts").textContent = data.totalProdutos;
+        document.getElementById("totalSales").textContent = data.totalVendas;
+        document.getElementById("totalRevenue").textContent =
+            "R$ " + Number(data.faturamento).toFixed(2);
+
+    } catch (error) {
+        console.error("Erro ao carregar dados do Neon:", error);
+    }
+}
+
+updateStatistics();
 
     if (totalProductsEl) {
         totalProductsEl.textContent = produtos.length;
