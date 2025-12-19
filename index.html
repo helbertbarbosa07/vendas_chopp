@@ -1297,1361 +1297,982 @@
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
 
-    <script>
-        // ===== CONFIGURAÇÃO SUPABASE =====
-        const SUPABASE_URL = 'https://pmjzyucoxuzhraxufpmz.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtanp5dWNveHV6aHJheHVmcG16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNjQxNDMsImV4cCI6MjA4MTY0MDE0M30.0bA9joNUFdiOMIaE_sQwT0ecsKP41YmLpeBTKKXUurw';
-        
-        let supabase = null;
-        let carrinho = [];
-        let charts = {};
-        
-        // ===== INICIALIZAÇÃO =====
-        document.addEventListener('DOMContentLoaded', async function() {
-            console.log('🚀 Inicializando Chop Manager PRO...');
+  <script>
+    // ===== CONFIGURAÇÃO VERCEL =====
+    const API_URL = window.location.origin + '/api/neon';
+    
+    // ===== DADOS DO SISTEMA =====
+    let produtos = JSON.parse(localStorage.getItem('chop_produtos')) || [];
+    let vendas = JSON.parse(localStorage.getItem('chop_vendas')) || [];
+    let carrinho = [];
+    let charts = {};
+    let dbOnline = false;
+    
+    // ===== LISTA DE EMOJIS =====
+    const emojis = [
+        "🍦", "🍨", "🍧", "🍫", "🍓", "🍌", "🍇", "🍎", "🍉", "🍊",
+        "🍋", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑"
+    ];
+    
+    // ===== FUNÇÕES DO NEON =====
+    async function neonQuery(sql, params = []) {
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sql, params })
+            });
             
-            try {
-                // Inicializar Supabase
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                console.log('✅ Supabase inicializado');
-                
-                // Inicializar data/hora
-                updateDateTime();
-                setInterval(updateDateTime, 1000);
-                
-                // Inicializar navegação
-                initNavigation();
-                
-                // Inicializar componentes
-                initComponents();
-                
-                // Inicializar emoji picker e photo upload
-                initEmojiPicker();
-                initPhotoUpload();
-                
-                // Configurar listeners
-                document.getElementById('reportPeriod').addEventListener('change', function() {
-                    const customRange = document.getElementById('customDateRange');
-                    customRange.style.display = this.value === 'personalizado' ? 'flex' : 'none';
-                });
-                
-                document.getElementById('productFilter').addEventListener('change', loadProductsList);
-                document.getElementById('productSearch').addEventListener('input', loadProductsList);
-                
-                // Carregar dados iniciais
-                await loadDashboard();
-                await loadProductsForSale();
-                await loadProductsList();
-                
-                showNotification('✅ Sistema inicializado com sucesso!', 'success');
-                
-            } catch (error) {
-                console.error('❌ Erro na inicialização:', error);
-                showNotification('⚠️ Sistema carregado. Conecte ao Supabase para sincronizar.', 'warning');
-            }
-        });
-        
-        // ===== FUNÇÕES DO SISTEMA =====
-        
-        // FUNÇÕES DO CARRINHO
-        function addToCart(produto) {
-            if (produto.estoque <= 0) {
-                showNotification(`❌ ${produto.nome} está sem estoque!`, 'error');
-                return;
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
-            const itemIndex = carrinho.findIndex(item => item.produtoId === produto.id);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error);
             
-            if (itemIndex > -1) {
-                if (carrinho[itemIndex].quantidade >= produto.estoque) {
-                    showNotification(`❌ Estoque insuficiente de ${produto.nome}!`, 'error');
-                    return;
-                }
-                carrinho[itemIndex].quantidade += 1;
-                carrinho[itemIndex].total = carrinho[itemIndex].quantidade * produto.preco;
+            return data;
+        } catch (error) {
+            console.error('Erro Neon:', error);
+            dbOnline = false;
+            throw error;
+        }
+    }
+    
+    async function checkDatabase() {
+        try {
+            await neonQuery('SELECT NOW() as teste');
+            dbOnline = true;
+            showNotification('✅ Conectado ao Neon DB', 'success');
+            return true;
+        } catch (error) {
+            dbOnline = false;
+            showNotification('⚠️ Modo offline ativado', 'warning');
+            return false;
+        }
+    }
+    
+    async function loadFromNeon() {
+        try {
+            if (!await checkDatabase()) return false;
+            
+            // Carregar produtos
+            const produtosData = await neonQuery('SELECT * FROM produtos ORDER BY nome');
+            produtos = produtosData.rows || [];
+            
+            // Carregar vendas
+            const vendasData = await neonQuery(`
+                SELECT v.*, 
+                       COALESCE(
+                           JSON_AGG(
+                               JSON_BUILD_OBJECT(
+                                   'produtoId', vi.produto_id,
+                                   'nome', vi.nome,
+                                   'quantidade', vi.quantidade,
+                                   'preco', vi.preco
+                               )
+                           ) FILTER (WHERE vi.id IS NOT NULL),
+                           '[]'::json
+                       ) as itens
+                FROM vendas v
+                LEFT JOIN venda_itens vi ON v.id = vi.venda_id
+                GROUP BY v.id
+                ORDER BY v.data DESC, v.hora DESC
+            `);
+            
+            vendas = (vendasData.rows || []).map(v => ({
+                id: v.id,
+                data: v.data,
+                hora: v.hora,
+                itens: v.itens,
+                total: parseFloat(v.total),
+                pagamento: v.pagamento
+            }));
+            
+            // Salvar localmente como backup
+            saveAllData();
+            
+            return true;
+        } catch (error) {
+            console.log('Usando dados locais');
+            return false;
+        }
+    }
+    
+    async function saveProductToNeon(product) {
+        try {
+            if (product.id) {
+                await neonQuery(`
+                    UPDATE produtos 
+                    SET nome = $1, descricao = $2, preco = $3, estoque = $4, 
+                        emoji = $5, cor = $6, ativo = $7
+                    WHERE id = $8
+                `, [
+                    product.nome, product.descricao, product.preco, product.estoque,
+                    product.emoji, product.cor, product.ativo, product.id
+                ]);
             } else {
-                carrinho.push({
-                    produtoId: produto.id,
-                    nome: produto.nome,
-                    preco: produto.preco,
-                    quantidade: 1,
-                    total: produto.preco,
-                    emoji: produto.emoji,
-                    cor: produto.cor
-                });
+                const result = await neonQuery(`
+                    INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+                    RETURNING id
+                `, [
+                    product.nome, product.descricao, product.preco, product.estoque,
+                    product.emoji, product.cor, product.ativo
+                ]);
+                product.id = result.rows[0].id;
+            }
+            return product;
+        } catch (error) {
+            throw error;
+        }
+    }
+    
+    async function saveSaleToNeon(sale) {
+        try {
+            const vendaResult = await neonQuery(`
+                INSERT INTO vendas (data, hora, total, pagamento)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `, [sale.data, sale.hora, sale.total, sale.pagamento]);
+            
+            const vendaId = vendaResult.rows[0].id;
+            
+            for (const item of sale.itens) {
+                await neonQuery(`
+                    INSERT INTO venda_itens (venda_id, produto_id, nome, quantidade, preco)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [vendaId, item.produtoId, item.nome, item.quantidade, item.preco]);
+                
+                await neonQuery(`
+                    UPDATE produtos 
+                    SET estoque = estoque - $1, vendas = vendas + $1
+                    WHERE id = $2
+                `, [item.quantidade, item.produtoId]);
             }
             
-            updateCart();
-            showNotification(`✅ ${produto.nome} adicionado ao carrinho!`, 'success');
+            sale.id = vendaId;
+            return sale;
+        } catch (error) {
+            throw error;
+        }
+    }
+    
+    // ===== INICIALIZAÇÃO =====
+    document.addEventListener('DOMContentLoaded', async function() {
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        
+        initNavigation();
+        initComponents();
+        
+        // Tentar carregar do Neon
+        await loadFromNeon();
+        
+        // Carregar interface
+        loadDashboard();
+        loadProductsForSale();
+        loadProductsList();
+        
+        showNotification('Sistema carregado!', 'success');
+    });
+    
+    function initNavigation() {
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const pageId = this.dataset.page;
+                navigateTo(pageId);
+            });
+        });
+    }
+    
+    function initComponents() {
+        document.getElementById('clearCart')?.addEventListener('click', clearCart);
+        document.getElementById('finalizeSale')?.addEventListener('click', finalizeSale);
+        document.getElementById('addProduct')?.addEventListener('click', () => openProductModal());
+        document.getElementById('closeModal')?.addEventListener('click', closeProductModal);
+        document.getElementById('cancelModal')?.addEventListener('click', closeProductModal);
+        document.getElementById('saveProduct')?.addEventListener('click', saveProduct);
+        
+        // Inicializar emoji picker
+        initEmojiPicker();
+    }
+    
+    function navigateTo(pageId) {
+        document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+        
+        document.querySelector(`.nav-tab[data-page="${pageId}"]`).classList.add('active');
+        document.getElementById(pageId).classList.add('active');
+        
+        switch(pageId) {
+            case 'dashboard': loadDashboard(); break;
+            case 'vendas': loadProductsForSale(); break;
+            case 'produtos': loadProductsList(); break;
+        }
+    }
+    
+    // ===== DASHBOARD =====
+    function loadDashboard() {
+        try {
+            const hoje = new Date().toISOString().split('T')[0];
+            const vendasHoje = vendas.filter(v => v.data === hoje);
+            
+            const faturamentoHoje = vendasHoje.reduce((sum, v) => sum + v.total, 0);
+            const chopsHoje = vendasHoje.reduce((sum, v) => 
+                sum + v.itens.reduce((s, i) => s + i.quantidade, 0), 0);
+            const mediaVenda = vendasHoje.length > 0 ? faturamentoHoje / vendasHoje.length : 0;
+            const estoqueBaixo = produtos.filter(p => p.estoque < 10 && p.ativo).length;
+            
+            document.getElementById('todayRevenue').textContent = `R$ ${faturamentoHoje.toFixed(2)}`;
+            document.getElementById('todayChops').textContent = chopsHoje;
+            document.getElementById('avgSale').textContent = `R$ ${mediaVenda.toFixed(2)}`;
+            document.getElementById('lowStock').textContent = estoqueBaixo;
+            
+            loadRecentSales();
+            loadTopProducts();
+            loadLowStockProducts();
+            updateCharts();
+        } catch (error) {
+            console.error('Erro dashboard:', error);
+        }
+    }
+    
+    function loadRecentSales() {
+        const recentSalesList = document.getElementById('recentSalesList');
+        const recentSales = vendas.slice(0, 5);
+        
+        if (recentSales.length === 0) {
+            recentSalesList.innerHTML = `
+                <div class="empty-sales">
+                    <i class="fas fa-receipt"></i>
+                    <p>Nenhuma venda registrada ainda</p>
+                </div>
+            `;
+            return;
         }
         
-        function updateCart() {
-            const cartItems = document.getElementById('cartItems');
-            const totalItems = carrinho.reduce((sum, item) => sum + item.quantidade, 0);
-            const totalValue = carrinho.reduce((sum, item) => sum + item.total, 0);
+        let html = `
+            <table class="sales-table">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Itens</th>
+                        <th>Total</th>
+                        <th>Pagamento</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        recentSales.forEach(venda => {
+            const totalItens = venda.itens.reduce((sum, item) => sum + item.quantidade, 0);
+            const pagamentoClass = {
+                'dinheiro': 'payment-dinheiro',
+                'cartao': 'payment-cartao',
+                'pix': 'payment-pix'
+            }[venda.pagamento] || '';
             
-            document.getElementById('totalItems').textContent = totalItems;
-            document.getElementById('totalValue').textContent = `R$ ${totalValue.toFixed(2)}`;
-            document.getElementById('totalToPay').textContent = `R$ ${totalValue.toFixed(2)}`;
-            
-            document.getElementById('finalizeSale').disabled = totalItems === 0;
-            
-            if (carrinho.length === 0) {
-                cartItems.innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: var(--gray);">
-                        <i class="fas fa-shopping-cart" style="font-size: 40px; margin-bottom: 10px; opacity: 0.3;"></i>
-                        <p>Carrinho vazio</p>
-                        <p style="font-size: 12px;">Adicione produtos clicando nos botões</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            cartItems.innerHTML = carrinho.map((item, index) => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 10px; margin-bottom: 10px;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="font-size: 24px; color: ${item.cor};">${item.emoji}</div>
-                        <div>
-                            <div style="font-weight: 700; color: var(--dark); margin-bottom: 5px;">${item.nome}</div>
-                            <div style="font-size: 14px; color: var(--gray);">R$ ${item.preco.toFixed(2)} cada</div>
+            html += `
+                <tr>
+                    <td>${venda.hora}</td>
+                    <td>${totalItens} itens</td>
+                    <td><strong>R$ ${venda.total.toFixed(2)}</strong></td>
+                    <td><span class="payment-badge ${pagamentoClass}">${venda.pagamento}</span></td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        recentSalesList.innerHTML = html;
+    }
+    
+    function loadTopProducts() {
+        const topProductsList = document.getElementById('topProductsList');
+        const produtosOrdenados = [...produtos]
+            .filter(p => p.vendas > 0)
+            .sort((a, b) => b.vendas - a.vendas)
+            .slice(0, 5);
+        
+        if (produtosOrdenados.length === 0) {
+            topProductsList.innerHTML = `
+                <div class="empty-sales">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Sem dados de vendas</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="top-products-list">';
+        
+        produtosOrdenados.forEach((produto, index) => {
+            html += `
+                <div class="top-product-item">
+                    <div class="top-product-emoji">${produto.emoji}</div>
+                    <div class="top-product-info">
+                        <div class="top-product-name">${produto.nome}</div>
+                        <div class="top-product-stats">
+                            <span>${produto.vendas} vendas</span>
+                            <span>R$ ${(produto.preco * produto.vendas).toFixed(2)}</span>
                         </div>
                     </div>
-                    <div style="text-align: right;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                            <button class="btn-primary" style="width: 30px; height: 30px; padding: 0; font-size: 12px; background: var(--danger);" onclick="removeFromCart(${index})">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <span style="font-weight: 900; font-size: 16px; min-width: 30px; text-align: center;">${item.quantidade}</span>
-                            <button class="btn-primary" style="width: 30px; height: 30px; padding: 0; font-size: 12px; background: var(--success);" onclick="increaseQuantity(${index})">
-                                <i class="fas fa-plus"></i>
-                            </button>
+                    <div class="top-product-rank">${index + 1}</div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        topProductsList.innerHTML = html;
+    }
+    
+    function loadLowStockProducts() {
+        const lowStockList = document.getElementById('lowStockList');
+        const lowStockContainer = document.getElementById('lowStockContainer');
+        const produtosBaixoEstoque = produtos.filter(p => p.estoque < 10 && p.ativo);
+        
+        if (produtosBaixoEstoque.length === 0) {
+            lowStockContainer.style.display = 'none';
+            return;
+        }
+        
+        lowStockContainer.style.display = 'block';
+        let html = '<div class="low-stock-list">';
+        
+        produtosBaixoEstoque.slice(0, 6).forEach(produto => {
+            html += `
+                <div class="low-stock-item">
+                    <div class="low-stock-emoji">${produto.emoji}</div>
+                    <div class="low-stock-info">
+                        <div class="low-stock-name">${produto.nome}</div>
+                        <div class="low-stock-quantity">${produto.estoque} unidades restantes</div>
+                    </div>
+                    <div class="warning-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        lowStockList.innerHTML = html;
+    }
+    
+    // ===== VENDAS =====
+    function loadProductsForSale() {
+        const productsGrid = document.getElementById('productsGrid');
+        const produtosAtivos = produtos.filter(p => p.ativo && p.estoque > 0);
+        
+        if (produtosAtivos.length === 0) {
+            productsGrid.innerHTML = `
+                <div class="empty-sales" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <i class="fas fa-ice-cream" style="font-size: 50px; opacity: 0.3;"></i>
+                    <p style="margin-top: 10px; color: var(--gray);">Nenhum produto cadastrado</p>
+                    <button class="btn-primary" onclick="navigateTo('produtos')" style="margin-top: 15px;">
+                        <i class="fas fa-plus"></i> Cadastrar Produtos
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        produtosAtivos.forEach(produto => {
+            const estoqueStatus = produto.estoque < 5 ? 'style="color: var(--danger);"' : '';
+            
+            html += `
+                <div class="flavor-card" onclick="addToCart(${produto.id})" 
+                     style="border-color: ${produto.cor || '#36B5B0'};">
+                    <div style="font-size: 50px; margin-bottom: 15px;">${produto.emoji}</div>
+                    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 10px; color: var(--dark);">
+                        ${produto.nome}
+                    </h3>
+                    <p style="color: var(--gray); font-size: 14px; margin-bottom: 15px; min-height: 40px;">
+                        ${produto.descricao || 'Sem descrição'}
+                    </p>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 24px; font-weight: 900; color: ${produto.cor || '#36B5B0'};">
+                            R$ ${produto.preco.toFixed(2)}
                         </div>
-                        <div style="font-weight: 900; color: var(--dark); font-size: 18px;">
-                            R$ ${item.total.toFixed(2)}
+                        <div style="font-size: 14px; color: var(--gray);" ${estoqueStatus}>
+                            <i class="fas fa-box"></i> ${produto.estoque}
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
+        });
+        
+        productsGrid.innerHTML = html;
+        updateCart();
+    }
+    
+    function addToCart(produtoId) {
+        const produto = produtos.find(p => p.id === produtoId);
+        if (!produto || produto.estoque <= 0) {
+            showNotification('Produto sem estoque!', 'error');
+            return;
         }
         
-        function removeFromCart(index) {
-            if (carrinho[index].quantidade > 1) {
-                carrinho[index].quantidade -= 1;
-                carrinho[index].total = carrinho[index].quantidade * carrinho[index].preco;
-            } else {
-                carrinho.splice(index, 1);
+        const existingItem = carrinho.find(item => item.produtoId === produtoId);
+        
+        if (existingItem) {
+            if (existingItem.quantidade >= produto.estoque) {
+                showNotification('Estoque insuficiente!', 'warning');
+                return;
             }
-            updateCart();
+            existingItem.quantidade++;
+            existingItem.total = existingItem.quantidade * existingItem.preco;
+        } else {
+            carrinho.push({
+                produtoId: produto.id,
+                nome: produto.nome,
+                emoji: produto.emoji,
+                preco: produto.preco,
+                quantidade: 1,
+                total: produto.preco
+            });
         }
         
-        function increaseQuantity(index) {
-            carrinho[index].quantidade += 1;
-            carrinho[index].total = carrinho[index].quantidade * carrinho[index].preco;
-            updateCart();
+        updateCart();
+        showNotification(`${produto.emoji} ${produto.nome} adicionado!`, 'success');
+    }
+    
+    function updateCart() {
+        const cartItems = document.getElementById('cartItems');
+        const totalItems = carrinho.reduce((sum, item) => sum + item.quantidade, 0);
+        const totalValue = carrinho.reduce((sum, item) => sum + item.total, 0);
+        
+        document.getElementById('totalItems').textContent = totalItems;
+        document.getElementById('totalValue').textContent = `R$ ${totalValue.toFixed(2)}`;
+        document.getElementById('totalToPay').textContent = `R$ ${totalValue.toFixed(2)}`;
+        
+        const finalizeBtn = document.getElementById('finalizeSale');
+        finalizeBtn.disabled = carrinho.length === 0;
+        
+        if (carrinho.length === 0) {
+            cartItems.innerHTML = `
+                <div class="empty-sales" style="padding: 20px; text-align: center;">
+                    <i class="fas fa-shopping-cart" style="font-size: 40px; opacity: 0.3;"></i>
+                    <p style="margin-top: 10px; color: var(--gray);">Selecione os produtos para começar</p>
+                </div>
+            `;
+            return;
         }
         
-        function clearCart() {
+        let html = `
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #f0f0f0;">
+                        <th style="padding: 10px; text-align: left;">Produto</th>
+                        <th style="padding: 10px; text-align: center;">Qtd</th>
+                        <th style="padding: 10px; text-align: right;">Total</th>
+                        <th style="padding: 10px; text-align: center;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        carrinho.forEach((item, index) => {
+            html += `
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                    <td style="padding: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">${item.emoji}</span>
+                            <div>
+                                <div style="font-weight: 700;">${item.nome}</div>
+                                <div style="font-size: 12px; color: var(--gray);">R$ ${item.preco.toFixed(2)} un.</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <div style="display: inline-flex; align-items: center; background: #f8f9fa; border-radius: 8px; padding: 2px;">
+                            <button onclick="updateCartItem(${index}, -1)" 
+                                    style="width: 30px; height: 30px; border: none; background: none; cursor: pointer;">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <span style="width: 40px; text-align: center;">${item.quantidade}</span>
+                            <button onclick="updateCartItem(${index}, 1)" 
+                                    style="width: 30px; height: 30px; border: none; background: none; cursor: pointer;">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td style="padding: 10px; text-align: right; font-weight: 800;">
+                        R$ ${item.total.toFixed(2)}
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <button onclick="removeCartItem(${index})" 
+                                style="background: var(--danger); color: white; border: none; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        cartItems.innerHTML = html;
+    }
+    
+    function updateCartItem(index, change) {
+        const item = carrinho[index];
+        const produto = produtos.find(p => p.id === item.produtoId);
+        
+        if (!produto) return;
+        
+        const newQuantity = item.quantidade + change;
+        
+        if (newQuantity < 1) {
+            removeCartItem(index);
+            return;
+        }
+        
+        if (newQuantity > produto.estoque) {
+            showNotification('Estoque insuficiente!', 'warning');
+            return;
+        }
+        
+        item.quantidade = newQuantity;
+        item.total = item.quantidade * item.preco;
+        updateCart();
+    }
+    
+    function removeCartItem(index) {
+        carrinho.splice(index, 1);
+        updateCart();
+        showNotification('Item removido do carrinho!', 'info');
+    }
+    
+    function clearCart() {
+        if (carrinho.length === 0) return;
+        
+        if (confirm('Limpar todo o carrinho?')) {
             carrinho = [];
             updateCart();
-            showNotification('🛒 Carrinho limpo!', 'info');
+            showNotification('Carrinho limpo!', 'info');
         }
-        
-        // ===== FUNÇÕES SUPABASE =====
-        
-        // PRODUTOS
-        async function salvarProduto(produto) {
+    }
+    
+    async function finalizeSale() {
+        try {
+            if (carrinho.length === 0) return;
+            
+            const formaPagamento = document.querySelector('input[name="payment"]:checked').value;
+            const total = carrinho.reduce((sum, item) => sum + item.total, 0);
+            
+            const novaVenda = {
+                data: new Date().toISOString().split('T')[0],
+                hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                itens: carrinho.map(item => ({
+                    produtoId: item.produtoId,
+                    nome: item.nome,
+                    quantidade: item.quantidade,
+                    preco: item.preco
+                })),
+                total: total,
+                pagamento: formaPagamento
+            };
+            
             try {
-                if (!supabase) {
-                    showNotification('❌ Sem conexão com o banco de dados', 'error');
-                    return null;
-                }
-                
-                if (produto.id) {
-                    // Atualizar produto existente
-                    const { data, error } = await supabase
-                        .from('produtos')
-                        .update({
-                            nome: produto.nome,
-                            descricao: produto.descricao,
-                            preco: produto.preco,
-                            estoque: produto.estoque,
-                            emoji: produto.emoji,
-                            cor: produto.cor,
-                            ativo: produto.ativo,
-                            foto: produto.foto,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', produto.id)
-                        .select();
-                    
-                    if (error) throw error;
-                    return data[0];
+                if (dbOnline) {
+                    const vendaSalva = await saveSaleToNeon(novaVenda);
+                    novaVenda.id = vendaSalva.id;
+                    showNotification(`✅ Venda salva no Neon! R$ ${total.toFixed(2)}`, 'success');
                 } else {
-                    // Criar novo produto
-                    const { data, error } = await supabase
-                        .from('produtos')
-                        .insert([{
-                            nome: produto.nome,
-                            descricao: produto.descricao,
-                            preco: produto.preco,
-                            estoque: produto.estoque,
-                            emoji: produto.emoji,
-                            cor: produto.cor,
-                            ativo: produto.ativo,
-                            vendas: 0,
-                            categoria: 'geral',
-                            foto: produto.foto
-                        }])
-                        .select();
-                    
-                    if (error) throw error;
-                    return data[0];
+                    throw new Error('Offline');
                 }
-            } catch (error) {
-                console.error('Erro ao salvar produto:', error);
-                showNotification('❌ Erro ao salvar produto', 'error');
-                return null;
-            }
-        }
-        
-        async function obterProduto(id) {
-            try {
-                if (!supabase) return null;
+            } catch (neonError) {
+                novaVenda.id = Date.now();
+                vendas.unshift(novaVenda);
                 
-                const { data, error } = await supabase
-                    .from('produtos')
-                    .select('*')
-                    .eq('id', id)
-                    .single();
-                
-                if (error) throw error;
-                return data;
-            } catch (error) {
-                console.error('Erro ao obter produto:', error);
-                return null;
-            }
-        }
-        
-        async function obterTodosProdutos(filtro = {}) {
-            try {
-                if (!supabase) return [];
-                
-                let query = supabase.from('produtos').select('*');
-                
-                // Aplicar filtros
-                if (filtro.ativos !== undefined) {
-                    query = query.eq('ativo', filtro.ativos);
-                }
-                
-                if (filtro.estoqueBaixo) {
-                    query = query.lt('estoque', 10);
-                }
-                
-                if (filtro.busca) {
-                    query = query.or(`nome.ilike.%${filtro.busca}%,descricao.ilike.%${filtro.busca}%`);
-                }
-                
-                // Ordenar por nome
-                query = query.order('nome', { ascending: true });
-                
-                const { data, error } = await query;
-                
-                if (error) throw error;
-                return data || [];
-            } catch (error) {
-                console.error('Erro ao obter produtos:', error);
-                return [];
-            }
-        }
-        
-        async function excluirProduto(id) {
-            try {
-                if (!supabase) {
-                    showNotification('❌ Sem conexão com o banco de dados', 'error');
-                    return false;
-                }
-                
-                const { error } = await supabase
-                    .from('produtos')
-                    .delete()
-                    .eq('id', id);
-                
-                if (error) throw error;
-                return true;
-            } catch (error) {
-                console.error('Erro ao excluir produto:', error);
-                showNotification('❌ Erro ao excluir produto', 'error');
-                return false;
-            }
-        }
-        
-        // VENDAS
-        async function salvarVenda(venda) {
-            try {
-                if (!supabase) {
-                    showNotification('❌ Sem conexão com o banco de dados', 'error');
-                    return null;
-                }
-                
-                // Primeiro, salvar a venda
-                const { data: vendaSalva, error: vendaError } = await supabase
-                    .from('vendas')
-                    .insert([{
-                        data: venda.data,
-                        hora: venda.hora,
-                        itens: venda.itens,
-                        total: venda.total,
-                        pagamento: venda.pagamento
-                    }])
-                    .select();
-                
-                if (vendaError) throw vendaError;
-                
-                // Atualizar estoque e contador de vendas de cada produto
-                for (const item of venda.itens) {
-                    // Obter produto atual
-                    const { data: produto, error: produtoError } = await supabase
-                        .from('produtos')
-                        .select('*')
-                        .eq('id', item.produtoId)
-                        .single();
-                    
-                    if (produtoError) throw produtoError;
-                    
-                    // Atualizar produto
-                    const { error: updateError } = await supabase
-                        .from('produtos')
-                        .update({
-                            estoque: produto.estoque - item.quantidade,
-                            vendas: (produto.vendas || 0) + item.quantidade,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', item.produtoId);
-                    
-                    if (updateError) throw updateError;
-                }
-                
-                return vendaSalva[0];
-            } catch (error) {
-                console.error('Erro ao salvar venda:', error);
-                showNotification('❌ Erro ao salvar venda', 'error');
-                return null;
-            }
-        }
-        
-        async function obterVendas(filtro = {}) {
-            try {
-                if (!supabase) return [];
-                
-                let query = supabase.from('vendas').select('*');
-                
-                // Aplicar filtros de data
-                if (filtro.dataInicio && filtro.dataFim) {
-                    query = query.gte('data', filtro.dataInicio).lte('data', filtro.dataFim);
-                } else if (filtro.data) {
-                    query = query.eq('data', filtro.data);
-                }
-                
-                // Ordenar por data mais recente
-                query = query.order('created_at', { ascending: false });
-                
-                const { data, error } = await query;
-                
-                if (error) throw error;
-                return data || [];
-            } catch (error) {
-                console.error('Erro ao obter vendas:', error);
-                return [];
-            }
-        }
-        
-        // ===== FUNÇÕES DAS ABAS =====
-        
-        // DASHBOARD
-        async function loadDashboard() {
-            try {
-                const hoje = new Date().toISOString().split('T')[0];
-                const vendasHoje = await obterVendas({ data: hoje });
-                
-                // Calcular estatísticas
-                const faturamentoHoje = vendasHoje.reduce((sum, v) => sum + (v.total || 0), 0);
-                const chopsHoje = vendasHoje.reduce((sum, v) => 
-                    sum + (v.itens ? v.itens.reduce((s, i) => s + (i.quantidade || 0), 0) : 0), 0);
-                const mediaVenda = vendasHoje.length > 0 ? faturamentoHoje / vendasHoje.length : 0;
-                
-                const produtosAtivos = await obterTodosProdutos({ ativos: true });
-                const estoqueBaixo = produtosAtivos.filter(p => p.estoque < 10).length;
-                
-                // Atualizar estatísticas
-                document.getElementById('todayRevenue').textContent = `R$ ${faturamentoHoje.toFixed(2)}`;
-                document.getElementById('todayChops').textContent = chopsHoje;
-                document.getElementById('avgSale').textContent = `R$ ${mediaVenda.toFixed(2)}`;
-                document.getElementById('lowStock').textContent = estoqueBaixo;
-                
-                // Atualizar gráficos
-                updateCharts(vendasHoje, produtosAtivos);
-                
-                // Carregar últimas vendas
-                loadRecentSales(vendasHoje);
-                
-                // Carregar produtos mais vendidos
-                loadTopProducts(produtosAtivos);
-                
-                // Carregar estoque baixo
-                loadLowStockProducts(produtosAtivos);
-                
-                // Atualizar informações do sistema
-                updateSystemInfo();
-                
-            } catch (error) {
-                console.error('Erro ao carregar dashboard:', error);
-            }
-        }
-        
-        function updateCharts(vendas, produtos) {
-            try {
-                // Gráfico de produtos mais vendidos
-                updateFlavorsChart(produtos);
-                
-                // Gráfico semanal
-                updateWeeklyChart(vendas);
-            } catch (error) {
-                console.error('Erro ao atualizar gráficos:', error);
-            }
-        }
-        
-        function updateFlavorsChart(produtos) {
-            try {
-                const ctx = document.getElementById('flavorsChart').getContext('2d');
-                
-                // Ordenar por vendas
-                const produtosOrdenados = [...produtos]
-                    .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
-                    .slice(0, 5);
-                
-                if (charts.flavorsChart) {
-                    charts.flavorsChart.destroy();
-                }
-                
-                if (produtosOrdenados.length > 0) {
-                    charts.flavorsChart = new Chart(ctx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: produtosOrdenados.map(p => p.nome),
-                            datasets: [{
-                                data: produtosOrdenados.map(p => p.vendas || 0),
-                                backgroundColor: produtosOrdenados.map(p => p.cor || '#36B5B0'),
-                                borderWidth: 2,
-                                borderColor: '#ffffff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'bottom',
-                                    labels: {
-                                        padding: 20,
-                                        usePointStyle: true,
-                                        pointStyle: 'circle'
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Erro ao criar gráfico de sabores:', error);
-            }
-        }
-        
-        function updateWeeklyChart(vendas) {
-            try {
-                const ctx = document.getElementById('weeklyChart').getContext('2d');
-                
-                // Agrupar vendas por dia da semana
-                const diasDaSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                const hoje = new Date();
-                const vendasPorDia = new Array(7).fill(0);
-                
-                vendas.forEach(venda => {
-                    const dataVenda = new Date(venda.data);
-                    const diaSemana = dataVenda.getDay();
-                    vendasPorDia[diaSemana] += venda.total;
+                carrinho.forEach(itemCarrinho => {
+                    const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
+                    if (produto) {
+                        produto.estoque -= itemCarrinho.quantidade;
+                        produto.vendas = (produto.vendas || 0) + itemCarrinho.quantidade;
+                    }
                 });
                 
-                if (charts.weeklyChart) {
-                    charts.weeklyChart.destroy();
+                showNotification(`✅ Venda local! R$ ${total.toFixed(2)}`, 'success');
+            }
+            
+            carrinho = [];
+            updateCart();
+            
+            if (dbOnline) {
+                await loadFromNeon();
+            } else {
+                saveAllData();
+                loadDashboard();
+            }
+            
+            setTimeout(() => navigateTo('dashboard'), 1000);
+            
+        } catch (error) {
+            console.error('Erro venda:', error);
+            showNotification('Erro ao finalizar venda!', 'error');
+        }
+    }
+    
+    // ===== PRODUTOS =====
+    function loadProductsList() {
+        const productsList = document.getElementById('productsList');
+        const filter = document.getElementById('productFilter')?.value || 'todos';
+        const search = document.getElementById('productSearch')?.value.toLowerCase() || '';
+        
+        let produtosFiltrados = [...produtos];
+        
+        // Aplicar filtros
+        if (filter === 'estoque-baixo') {
+            produtosFiltrados = produtosFiltrados.filter(p => p.estoque < 10);
+        } else if (filter === 'mais-vendidos') {
+            produtosFiltrados = produtosFiltrados.filter(p => p.vendas > 0);
+            produtosFiltrados.sort((a, b) => b.vendas - a.vendas);
+        } else if (filter === 'ativos') {
+            produtosFiltrados = produtosFiltrados.filter(p => p.ativo);
+        } else if (filter === 'inativos') {
+            produtosFiltrados = produtosFiltrados.filter(p => !p.ativo);
+        }
+        
+        // Aplicar busca
+        if (search) {
+            produtosFiltrados = produtosFiltrados.filter(p => 
+                p.nome.toLowerCase().includes(search) ||
+                (p.descricao && p.descricao.toLowerCase().includes(search))
+            );
+        }
+        
+        // Atualizar contadores
+        document.getElementById('totalProducts')?.textContent = produtos.length;
+        document.getElementById('totalSales')?.textContent = vendas.length;
+        const totalRevenue = vendas.reduce((sum, v) => sum + v.total, 0);
+        document.getElementById('totalRevenue')?.textContent = `R$ ${totalRevenue.toFixed(2)}`;
+        
+        if (produtosFiltrados.length === 0) {
+            productsList.innerHTML = `
+                <div class="empty-sales" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <i class="fas fa-ice-cream" style="font-size: 50px; opacity: 0.3;"></i>
+                    <p style="margin-top: 10px; color: var(--gray);">Nenhum produto encontrado</p>
+                    <button class="btn-primary" onclick="openProductModal()" style="margin-top: 15px;">
+                        <i class="fas fa-plus"></i> Adicionar Produto
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        produtosFiltrados.forEach(produto => {
+            const estoqueStatus = produto.estoque < 10 ? 'style="color: var(--danger);"' : '';
+            const activeStatus = produto.ativo ? 'Ativo' : 'Inativo';
+            const activeClass = produto.ativo ? 'background: #e8f5e9; color: #2e7d32;' : 'background: #ffebee; color: #c62828;';
+            
+            html += `
+                <div class="flavor-card" onclick="editProduct(${produto.id})" 
+                     style="border-color: ${produto.cor || '#36B5B0'};">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                        <div style="font-size: 40px;">${produto.emoji}</div>
+                        <span style="padding: 4px 10px; border-radius: 15px; font-size: 12px; ${activeClass}">
+                            ${activeStatus}
+                        </span>
+                    </div>
+                    
+                    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 8px; color: var(--dark);">
+                        ${produto.nome}
+                    </h3>
+                    
+                    <p style="color: var(--gray); font-size: 13px; margin-bottom: 15px; min-height: 40px;">
+                        ${produto.descricao || 'Sem descrição'}
+                    </p>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-size: 22px; font-weight: 900; color: ${produto.cor || '#36B5B0'};">
+                            R$ ${produto.preco.toFixed(2)}
+                        </div>
+                        <div style="font-size: 14px; color: var(--gray);" ${estoqueStatus}>
+                            <i class="fas fa-box"></i> ${produto.estoque}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--gray);">
+                        <span><i class="fas fa-shopping-cart"></i> ${produto.vendas || 0} vendas</span>
+                        <span>R$ ${((produto.vendas || 0) * produto.preco).toFixed(2)}</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn-primary" onclick="event.stopPropagation(); editProduct(${produto.id})"
+                                style="flex: 1; padding: 8px; font-size: 12px; background: var(--primary);">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button onclick="event.stopPropagation(); deleteProduct(${produto.id})"
+                                style="padding: 8px 12px; border: none; border-radius: 8px; background: var(--danger); color: white; cursor: pointer;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        productsList.innerHTML = html;
+    }
+    
+    // ===== MODAL DE PRODUTO =====
+    function openProductModal(produto = null) {
+        const modal = document.getElementById('productModal');
+        const title = document.getElementById('modalTitle');
+        const form = document.getElementById('productForm');
+        
+        if (produto) {
+            title.textContent = 'Editar Produto';
+            document.getElementById('productId').value = produto.id;
+            document.getElementById('productName').value = produto.nome;
+            document.getElementById('productDescription').value = produto.descricao || '';
+            document.getElementById('productPrice').value = produto.preco;
+            document.getElementById('productStock').value = produto.estoque;
+            document.getElementById('productEmoji').value = produto.emoji;
+            document.getElementById('selectedEmoji').textContent = produto.emoji;
+            document.getElementById('productColor').value = produto.cor || '#36B5B0';
+            document.getElementById('productActive').checked = produto.ativo !== false;
+        } else {
+            title.textContent = 'Novo Produto';
+            form.reset();
+            document.getElementById('productId').value = '';
+            document.getElementById('selectedEmoji').textContent = '🍦';
+            document.getElementById('productEmoji').value = '🍦';
+            document.getElementById('productColor').value = '#36B5B0';
+            document.getElementById('productActive').checked = true;
+        }
+        
+        modal.classList.add('active');
+    }
+    
+    function closeProductModal() {
+        document.getElementById('productModal').classList.remove('active');
+    }
+    
+    async function saveProduct() {
+        try {
+            const form = document.getElementById('productForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+            
+            const id = document.getElementById('productId').value;
+            const produtoData = {
+                id: id ? parseInt(id) : undefined,
+                nome: document.getElementById('productName').value,
+                descricao: document.getElementById('productDescription').value,
+                preco: parseFloat(document.getElementById('productPrice').value),
+                estoque: parseInt(document.getElementById('productStock').value),
+                emoji: document.getElementById('productEmoji').value,
+                cor: document.getElementById('productColor').value,
+                ativo: document.getElementById('productActive').checked,
+                vendas: 0
+            };
+            
+            try {
+                if (dbOnline) {
+                    const produtoSalvo = await saveProductToNeon(produtoData);
+                    produtoData.id = produtoSalvo.id;
+                    showNotification('✅ Produto salvo no Neon!', 'success');
+                } else {
+                    throw new Error('Offline');
                 }
-                
-                charts.weeklyChart = new Chart(ctx, {
-                    type: 'line',
+            } catch (neonError) {
+                if (id) {
+                    const index = produtos.findIndex(p => p.id === parseInt(id));
+                    if (index !== -1) {
+                        produtoData.vendas = produtos[index].vendas || 0;
+                        produtoData.id = parseInt(id);
+                        produtos[index] = produtoData;
+                    }
+                } else {
+                    produtoData.id = Date.now();
+                    produtos.push(produtoData);
+                }
+                showNotification('✅ Produto salvo localmente!', 'success');
+            }
+            
+            closeProductModal();
+            loadProductsList();
+            loadProductsForSale();
+            loadDashboard();
+            saveAllData();
+            
+        } catch (error) {
+            console.error('Erro salvar produto:', error);
+            showNotification('Erro ao salvar produto!', 'error');
+        }
+    }
+    
+    async function deleteProduct(id) {
+        const produto = produtos.find(p => p.id === id);
+        if (produto && confirm(`Excluir "${produto.nome}"?`)) {
+            try {
+                if (dbOnline) {
+                    await neonQuery('DELETE FROM produtos WHERE id = $1', [id]);
+                }
+                produtos = produtos.filter(p => p.id !== id);
+                showNotification('✅ Produto excluído!', 'success');
+                loadProductsList();
+                loadProductsForSale();
+                loadDashboard();
+                saveAllData();
+            } catch (error) {
+                showNotification('Erro ao excluir!', 'error');
+            }
+        }
+    }
+    
+    // ===== EMOJI PICKER =====
+    function initEmojiPicker() {
+        const picker = document.getElementById('emojiPicker');
+        const selector = document.getElementById('emojiSelector');
+        
+        // Preencher emojis
+        emojis.forEach(emoji => {
+            const div = document.createElement('div');
+            div.className = 'emoji-option';
+            div.textContent = emoji;
+            div.onclick = () => {
+                document.getElementById('selectedEmoji').textContent = emoji;
+                document.getElementById('productEmoji').value = emoji;
+                picker.classList.remove('show');
+            };
+            picker.appendChild(div);
+        });
+        
+        // Mostrar/ocultar picker
+        selector.addEventListener('click', (e) => {
+            e.stopPropagation();
+            picker.classList.toggle('show');
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (!picker.contains(e.target) && !selector.contains(e.target)) {
+                picker.classList.remove('show');
+            }
+        });
+    }
+    
+    // ===== GRÁFICOS =====
+    function updateCharts() {
+        // Gráfico de produtos mais vendidos
+        const produtosMaisVendidos = [...produtos]
+            .filter(p => p.vendas > 0)
+            .sort((a, b) => b.vendas - a.vendas)
+            .slice(0, 5);
+        
+        const flavorsCtx = document.getElementById('flavorsChart');
+        if (flavorsCtx) {
+            if (charts.flavors) charts.flavors.destroy();
+            
+            if (produtosMaisVendidos.length > 0) {
+                charts.flavors = new Chart(flavorsCtx, {
+                    type: 'doughnut',
                     data: {
-                        labels: diasDaSemana,
+                        labels: produtosMaisVendidos.map(p => p.nome),
                         datasets: [{
-                            label: 'Faturamento (R$)',
-                            data: vendasPorDia,
-                            borderColor: '#FF7BAC',
-                            backgroundColor: 'rgba(255, 123, 172, 0.1)',
-                            tension: 0.4,
-                            fill: true,
-                            borderWidth: 3
+                            data: produtosMaisVendidos.map(p => p.vendas),
+                            backgroundColor: produtosMaisVendidos.map(p => p.cor || '#36B5B0'),
+                            borderWidth: 2
                         }]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false,
                         plugins: {
-                            legend: {
-                                display: false
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: {
-                                    color: 'rgba(0,0,0,0.05)'
-                                },
-                                ticks: {
-                                    callback: function(value) {
-                                        return 'R$ ' + value.toFixed(0);
-                                    }
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    color: 'rgba(0,0,0,0.05)'
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Gráfico semanal
+        const weeklyCtx = document.getElementById('weeklyChart');
+        if (weeklyCtx) {
+            const hoje = new Date();
+            const diasSemana = [];
+            const vendasPorDia = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const dia = new Date();
+                dia.setDate(hoje.getDate() - i);
+                const dataStr = dia.toISOString().split('T')[0];
+                
+                diasSemana.push(dia.toLocaleDateString('pt-BR', { weekday: 'short' }));
+                vendasPorDia.push(
+                    vendas.filter(v => v.data === dataStr)
+                          .reduce((sum, v) => sum + v.total, 0)
+                );
+            }
+            
+            if (charts.weekly) charts.weekly.destroy();
+            
+            charts.weekly = new Chart(weeklyCtx, {
+                type: 'line',
+                data: {
+                    labels: diasSemana,
+                    datasets: [{
+                        label: 'Faturamento (R$)',
+                        data: vendasPorDia,
+                        borderColor: '#36B5B0',
+                        backgroundColor: 'rgba(54, 181, 176, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return 'R$ ' + value;
                                 }
                             }
                         }
                     }
-                });
-            } catch (error) {
-                console.error('Erro ao criar gráfico semanal:', error);
-            }
-        }
-        
-        // VENDAS - Carregar produtos para venda
-        async function loadProductsForSale() {
-            try {
-                const container = document.getElementById('productsGrid');
-                const produtosAtivos = await obterTodosProdutos({ ativos: true });
-                const produtosDisponiveis = produtosAtivos.filter(p => p.estoque > 0);
-                
-                if (produtosDisponiveis.length === 0) {
-                    container.innerHTML = `
-                        <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
-                            <i class="fas fa-ice-cream" style="font-size: 50px; margin-bottom: 15px; opacity: 0.3;"></i>
-                            <p style="font-size: 16px;">Nenhum produto disponível para venda</p>
-                            <button class="btn-primary" onclick="navigateTo('produtos')" style="margin-top: 15px;">
-                                <i class="fas fa-plus"></i> Cadastrar Produto
-                            </button>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                container.innerHTML = '';
-                
-                produtosDisponiveis.forEach(produto => {
-                    const card = document.createElement('div');
-                    card.className = 'flavor-card';
-                    
-                    const photoHTML = produto.foto ? 
-                        `<img src="${produto.foto}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%; margin-bottom: 10px;">` :
-                        `<div style="font-size: 40px; margin-bottom: 10px;">${produto.emoji}</div>`;
-                    
-                    card.innerHTML = `
-                        ${photoHTML}
-                        <div style="font-size: 18px; font-weight: 800; color: var(--dark); margin-bottom: 8px;">${produto.nome}</div>
-                        <div style="color: var(--gray); font-size: 13px; margin-bottom: 10px; min-height: 40px;">${produto.descricao || ''}</div>
-                        <div style="font-size: 24px; font-weight: 900; color: var(--primary); margin: 10px 0;">R$ ${produto.preco.toFixed(2)}</div>
-                        <div style="padding: 6px 12px; background: ${produto.estoque < 10 ? '#fff3cd' : '#f8f9fa'}; border-radius: 15px; color: ${produto.estoque < 10 ? '#856404' : 'var(--gray)'}; font-size: 13px; display: inline-block;">
-                            ${produto.estoque} unidades
-                        </div>
-                        <button class="btn-primary" style="margin-top: 15px; padding: 10px; font-size: 14px; width: 100%;" 
-                                data-id="${produto.id}" ${produto.estoque === 0 ? 'disabled' : ''}>
-                            <i class="fas fa-plus"></i> Adicionar
-                        </button>
-                    `;
-                    
-                    card.querySelector('button').addEventListener('click', () => addToCart(produto));
-                    container.appendChild(card);
-                });
-                
-                updateCart();
-            } catch (error) {
-                console.error('Erro ao carregar produtos para venda:', error);
-            }
-        }
-        
-        // PRODUTOS - Carregar lista de produtos
-        async function loadProductsList() {
-            try {
-                const container = document.getElementById('productsList');
-                const filter = document.getElementById('productFilter').value;
-                const search = document.getElementById('productSearch').value.toLowerCase();
-                
-                let filtro = {};
-                
-                switch(filter) {
-                    case 'estoque-baixo': 
-                        filtro.estoqueBaixo = true;
-                        break;
-                    case 'ativos': 
-                        filtro.ativos = true;
-                        break;
-                    case 'inativos': 
-                        filtro.ativos = false;
-                        break;
-                }
-                
-                if (search) {
-                    filtro.busca = search;
-                }
-                
-                let produtosFiltrados = await obterTodosProdutos(filtro);
-                
-                if (filter === 'mais-vendidos') {
-                    produtosFiltrados.sort((a, b) => (b.vendas || 0) - (a.vendas || 0));
-                }
-                
-                if (produtosFiltrados.length === 0) {
-                    container.innerHTML = `
-                        <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
-                            <i class="fas fa-ice-cream" style="font-size: 50px; margin-bottom: 15px; opacity: 0.3;"></i>
-                            <p style="font-size: 16px;">Nenhum produto encontrado</p>
-                            <button class="btn-primary" onclick="openProductModal()" style="margin-top: 15px;">
-                                <i class="fas fa-plus"></i> Cadastrar Produto
-                            </button>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                container.innerHTML = '';
-                
-                produtosFiltrados.forEach(produto => {
-                    const photoHTML = produto.foto ? 
-                        `<img src="${produto.foto}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 50%; margin-bottom: 10px;">` :
-                        `<div style="font-size: 40px; margin-bottom: 10px;">${produto.emoji}</div>`;
-                    
-                    const card = document.createElement('div');
-                    card.className = 'flavor-card';
-                    card.innerHTML = `
-                        ${photoHTML}
-                        <div style="font-size: 18px; font-weight: 800; color: var(--dark); margin-bottom: 8px;">${produto.nome}</div>
-                        <div style="color: var(--gray); font-size: 13px; margin-bottom: 10px;">${produto.descricao || ''}</div>
-                        <div style="font-size: 22px; font-weight: 900; color: var(--primary); margin: 10px 0;">R$ ${produto.preco.toFixed(2)}</div>
-                        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-                            <div style="padding: 6px 12px; background: ${produto.estoque < 10 ? '#fff3cd' : '#f8f9fa'}; border-radius: 15px; color: ${produto.estoque < 10 ? '#856404' : 'var(--gray)'}; font-size: 12px;">
-                                ${produto.estoque} unidades
-                            </div>
-                            <div style="padding: 6px 12px; background: ${produto.ativo ? '#e8f5e9' : '#ffebee'}; border-radius: 15px; color: ${produto.ativo ? '#2e7d32' : '#d32f2f'}; font-size: 12px;">
-                                ${produto.ativo ? 'Ativo' : 'Inativo'}
-                            </div>
-                        </div>
-                        <div style="padding: 6px 12px; background: #e3f2fd; border-radius: 15px; color: #1565c0; font-size: 12px; margin-bottom: 10px;">
-                            Vendas: ${produto.vendas || 0}
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px;">
-                            <button class="btn-primary" style="background: var(--secondary); padding: 8px; font-size: 12px;" onclick="editProduct(${produto.id})">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn-primary" style="background: var(--danger); padding: 8px; font-size: 12px;" onclick="deleteProduct(${produto.id})">
-                                <i class="fas fa-trash"></i> Excluir
-                            </button>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
-            } catch (error) {
-                console.error('Erro ao carregar lista de produtos:', error);
-                container.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
-                        <i class="fas fa-exclamation-circle" style="font-size: 50px; margin-bottom: 15px; color: var(--danger);"></i>
-                        <p style="font-size: 16px;">Erro ao carregar produtos</p>
-                    </div>
-                `;
-            }
-        }
-        
-        // ===== FUNÇÕES DE PRODUTO (MODAL) =====
-        async function openProductModal(produtoId = null) {
-            try {
-                const modal = document.getElementById('productModal');
-                const title = document.getElementById('modalTitle');
-                const form = document.getElementById('productForm');
-                
-                if (produtoId) {
-                    // Modo edição
-                    title.textContent = 'Editar Produto';
-                    const produto = await obterProduto(produtoId);
-                    
-                    if (produto) {
-                        document.getElementById('productId').value = produto.id;
-                        document.getElementById('productName').value = produto.nome;
-                        document.getElementById('productDescription').value = produto.descricao || '';
-                        document.getElementById('productPrice').value = produto.preco;
-                        document.getElementById('productStock').value = produto.estoque;
-                        document.getElementById('productEmoji').value = produto.emoji;
-                        document.getElementById('selectedEmoji').textContent = produto.emoji;
-                        document.getElementById('productColor').value = produto.cor || '#36B5B0';
-                        document.getElementById('productActive').checked = produto.ativo;
-                        
-                        if (produto.foto) {
-                            document.getElementById('photoPreview').src = produto.foto;
-                            document.getElementById('photoPreview').classList.add('show');
-                            document.getElementById('productPhotoData').value = produto.foto;
-                        }
-                    }
-                } else {
-                    // Modo novo produto
-                    title.textContent = 'Novo Produto';
-                    form.reset();
-                    document.getElementById('productId').value = '';
-                    document.getElementById('productEmoji').value = '🍦';
-                    document.getElementById('selectedEmoji').textContent = '🍦';
-                    document.getElementById('productColor').value = '#36B5B0';
-                    document.getElementById('productActive').checked = true;
-                    document.getElementById('photoPreview').classList.remove('show');
-                    document.getElementById('photoPreview').src = '';
-                    document.getElementById('productPhotoData').value = '';
-                }
-                
-                modal.classList.add('active');
-            } catch (error) {
-                console.error('Erro ao abrir modal de produto:', error);
-            }
-        }
-        
-        async function saveProduct() {
-            try {
-                const form = document.getElementById('productForm');
-                if (!form.checkValidity()) {
-                    form.reportValidity();
-                    return;
-                }
-                
-                const produto = {
-                    id: document.getElementById('productId').value || null,
-                    nome: document.getElementById('productName').value,
-                    descricao: document.getElementById('productDescription').value,
-                    preco: parseFloat(document.getElementById('productPrice').value),
-                    estoque: parseInt(document.getElementById('productStock').value),
-                    emoji: document.getElementById('productEmoji').value,
-                    cor: document.getElementById('productColor').value,
-                    ativo: document.getElementById('productActive').checked,
-                    foto: document.getElementById('productPhotoData').value || null
-                };
-                
-                const produtoSalvo = await salvarProduto(produto);
-                
-                if (produtoSalvo) {
-                    showNotification(`✅ Produto ${produto.id ? 'atualizado' : 'cadastrado'} com sucesso!`, 'success');
-                    closeModal();
-                    
-                    // Recarregar listas
-                    await loadProductsForSale();
-                    await loadProductsList();
-                    await loadDashboard();
-                }
-            } catch (error) {
-                console.error('Erro ao salvar produto:', error);
-                showNotification('❌ Erro ao salvar produto', 'error');
-            }
-        }
-        
-        async function editProduct(id) {
-            await openProductModal(id);
-        }
-        
-        async function deleteProduct(id) {
-            try {
-                if (!confirm('Tem certeza que deseja excluir este produto?')) {
-                    return;
-                }
-                
-                const sucesso = await excluirProduto(id);
-                
-                if (sucesso) {
-                    showNotification('✅ Produto excluído com sucesso!', 'success');
-                    
-                    // Recarregar listas
-                    await loadProductsForSale();
-                    await loadProductsList();
-                    await loadDashboard();
-                }
-            } catch (error) {
-                console.error('Erro ao excluir produto:', error);
-                showNotification('❌ Erro ao excluir produto', 'error');
-            }
-        }
-        
-        // ===== FUNÇÕES DE VENDA =====
-        async function finalizeSale() {
-            try {
-                if (carrinho.length === 0) return;
-                
-                const formaPagamento = document.querySelector('input[name="payment"]:checked').value;
-                const total = carrinho.reduce((sum, item) => sum + item.total, 0);
-                
-                const novaVenda = {
-                    data: new Date().toISOString().split('T')[0],
-                    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                    itens: carrinho.map(item => ({
-                        produtoId: item.produtoId,
-                        nome: item.nome,
-                        quantidade: item.quantidade,
-                        preco: item.preco
-                    })),
-                    total: total,
-                    pagamento: formaPagamento
-                };
-                
-                await salvarVenda(novaVenda);
-                
-                showNotification(`✅ Venda realizada! R$ ${total.toFixed(2)}`, 'success');
-                
-                carrinho = [];
-                updateCart();
-                
-                // Atualizar dashboard
-                await loadDashboard();
-                await loadProductsForSale();
-                
-                // Voltar para dashboard após 1 segundo
-                setTimeout(() => {
-                    navigateTo('dashboard');
-                }, 1000);
-            } catch (error) {
-                console.error('Erro ao finalizar venda:', error);
-                showNotification('❌ Erro ao finalizar venda! Tente novamente.', 'error');
-            }
-        }
-        
-        // ===== FUNÇÕES DE RELATÓRIOS =====
-        async function generateReport() {
-            try {
-                const periodo = document.getElementById('reportPeriod').value;
-                const container = document.getElementById('reportContent');
-                
-                container.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <i class="fas fa-spinner fa-spin" style="font-size: 40px; color: var(--primary);"></i>
-                        <p>Gerando relatório...</p>
-                    </div>
-                `;
-                
-                let vendasFiltradas = [];
-                let dataInicio, dataFim;
-                
-                const hoje = new Date();
-                const ontem = new Date(hoje);
-                ontem.setDate(hoje.getDate() - 1);
-                
-                switch(periodo) {
-                    case 'hoje':
-                        dataInicio = hoje.toISOString().split('T')[0];
-                        dataFim = dataInicio;
-                        break;
-                    case 'ontem':
-                        dataInicio = ontem.toISOString().split('T')[0];
-                        dataFim = dataInicio;
-                        break;
-                    case 'semana':
-                        const inicioSemana = new Date(hoje);
-                        inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-                        dataInicio = inicioSemana.toISOString().split('T')[0];
-                        dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'mes':
-                        dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0];
-                        dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'ano':
-                        dataInicio = new Date(hoje.getFullYear(), 0, 1).toISOString().split('T')[0];
-                        dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'personalizado':
-                        dataInicio = document.getElementById('startDate').value;
-                        dataFim = document.getElementById('endDate').value;
-                        if (!dataInicio || !dataFim) {
-                            showNotification('❌ Selecione as datas!', 'error');
-                            return;
-                        }
-                        break;
-                }
-                
-                vendasFiltradas = await obterVendas({ 
-                    dataInicio: dataInicio, 
-                    dataFim: dataFim 
-                });
-                
-                // Calcular estatísticas
-                const totalVendas = vendasFiltradas.length;
-                const faturamentoTotal = vendasFiltradas.reduce((sum, v) => sum + (v.total || 0), 0);
-                const totalItens = vendasFiltradas.reduce((sum, v) => 
-                    sum + (v.itens ? v.itens.reduce((s, i) => s + (i.quantidade || 0), 0) : 0), 0);
-                const mediaVenda = totalVendas > 0 ? faturamentoTotal / totalVendas : 0;
-                
-                // Agrupar por forma de pagamento
-                const pagamentos = {};
-                vendasFiltradas.forEach(v => {
-                    pagamentos[v.pagamento] = (pagamentos[v.pagamento] || 0) + (v.total || 0);
-                });
-                
-                // Gerar HTML do relatório
-                const formatDate = (dateStr) => {
-                    return new Date(dateStr).toLocaleDateString('pt-BR');
-                };
-                
-                container.innerHTML = `
-                    <div style="padding: 20px;">
-                        <h3 style="color: var(--dark); margin-bottom: 20px; font-size: 24px;">
-                            Relatório de Vendas - ${periodo}
-                        </h3>
-                        
-                        <!-- ESTATÍSTICAS -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Total de Vendas</div>
-                                <div style="font-size: 24px; font-weight: 900; color: var(--dark);">${totalVendas}</div>
-                            </div>
-                            
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Faturamento</div>
-                                <div style="font-size: 24px; font-weight: 900; color: var(--dark);">R$ ${faturamentoTotal.toFixed(2)}</div>
-                            </div>
-                            
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Itens Vendidos</div>
-                                <div style="font-size: 24px; font-weight: 900; color: var(--dark);">${totalItens}</div>
-                            </div>
-                            
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center;">
-                                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Média por Venda</div>
-                                <div style="font-size: 24px; font-weight: 900; color: var(--dark);">R$ ${mediaVenda.toFixed(2)}</div>
-                            </div>
-                        </div>
-                        
-                        <!-- FORMAS DE PAGAMENTO -->
-                        <h4 style="color: var(--dark); margin: 20px 0 10px 0; font-size: 18px;">Formas de Pagamento</h4>
-                        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                            ${Object.entries(pagamentos).map(([pagamento, valor]) => `
-                                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #dee2e6;">
-                                    <span>${pagamento.charAt(0).toUpperCase() + pagamento.slice(1)}</span>
-                                    <span style="font-weight: 700;">R$ ${valor.toFixed(2)}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                        
-                        <!-- LISTA DE VENDAS -->
-                        <h4 style="color: var(--dark); margin: 20px 0 10px 0; font-size: 18px;">Vendas Realizadas</h4>
-                        ${vendasFiltradas.length > 0 ? `
-                            <div style="max-height: 300px; overflow-y: auto;">
-                                <table style="width: 100%; border-collapse: collapse;">
-                                    <thead>
-                                        <tr style="background: #f8f9fa;">
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid var(--primary);">Data</th>
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid var(--primary);">Hora</th>
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid var(--primary);">Itens</th>
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid var(--primary);">Pagamento</th>
-                                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid var(--primary);">Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${vendasFiltradas.map(venda => `
-                                            <tr style="border-bottom: 1px solid #eee;">
-                                                <td style="padding: 10px;">${formatDate(venda.data)}</td>
-                                                <td style="padding: 10px;">${venda.hora}</td>
-                                                <td style="padding: 10px;">
-                                                    ${venda.itens ? venda.itens.map(i => `${i.quantidade}x ${i.nome}`).join(', ') : 'N/A'}
-                                                </td>
-                                                <td style="padding: 10px;">
-                                                    <span class="payment-badge payment-${venda.pagamento}">
-                                                        ${venda.pagamento}
-                                                    </span>
-                                                </td>
-                                                <td style="padding: 10px; font-weight: 700;">R$ ${venda.total.toFixed(2)}</td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ` : `
-                            <div style="text-align: center; padding: 20px; color: var(--gray);">
-                                Nenhuma venda encontrada neste período
-                            </div>
-                        `}
-                        
-                        <!-- PERÍODO -->
-                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; color: var(--gray); font-size: 12px;">
-                            Período: ${formatDate(dataInicio)} até ${formatDate(dataFim)}
-                        </div>
-                    </div>
-                `;
-                
-            } catch (error) {
-                console.error('Erro ao gerar relatório:', error);
-                showNotification('❌ Erro ao gerar relatório', 'error');
-            }
-        }
-        
-        function printReport() {
-            try {
-                window.print();
-            } catch (error) {
-                console.error('Erro ao imprimir:', error);
-                showNotification('❌ Erro ao imprimir', 'error');
-            }
-        }
-        
-        // ===== FUNÇÕES DO DASHBOARD =====
-        async function loadRecentSales(vendas) {
-            try {
-                const container = document.getElementById('recentSalesList');
-                const ultimasVendas = vendas.slice(0, 5);
-                
-                if (ultimasVendas.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-sales">
-                            <i class="fas fa-shopping-cart"></i>
-                            <p>Nenhuma venda hoje</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                container.innerHTML = `
-                    <table class="sales-table">
-                        <thead>
-                            <tr>
-                                <th>Hora</th>
-                                <th>Itens</th>
-                                <th>Pagamento</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${ultimasVendas.map(venda => `
-                                <tr>
-                                    <td>${venda.hora}</td>
-                                    <td>${venda.itens ? venda.itens.length : 0} itens</td>
-                                    <td>
-                                        <span class="payment-badge payment-${venda.pagamento}">
-                                            ${venda.pagamento}
-                                        </span>
-                                    </td>
-                                    <td style="font-weight: 700;">R$ ${venda.total.toFixed(2)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } catch (error) {
-                console.error('Erro ao carregar últimas vendas:', error);
-            }
-        }
-        
-        async function loadTopProducts(produtos) {
-            try {
-                const container = document.getElementById('topProductsList');
-                const produtosOrdenados = [...produtos]
-                    .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
-                    .slice(0, 5);
-                
-                if (produtosOrdenados.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-sales">
-                            <i class="fas fa-chart-line"></i>
-                            <p>Sem dados de vendas</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                container.innerHTML = `
-                    <div class="top-products-list">
-                        ${produtosOrdenados.map((produto, index) => `
-                            <div class="top-product-item">
-                                <div class="top-product-emoji">${produto.emoji}</div>
-                                <div class="top-product-info">
-                                    <div class="top-product-name">${produto.nome}</div>
-                                    <div class="top-product-stats">
-                                        <span>${produto.vendas || 0} vendas</span>
-                                        <span>${produto.estoque} estoque</span>
-                                    </div>
-                                </div>
-                                <div class="top-product-rank">${index + 1}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } catch (error) {
-                console.error('Erro ao carregar top produtos:', error);
-            }
-        }
-        
-        async function loadLowStockProducts(produtos) {
-            try {
-                const container = document.getElementById('lowStockContainer');
-                const listContainer = document.getElementById('lowStockList');
-                const produtosEstoqueBaixo = produtos.filter(p => p.estoque < 10 && p.estoque > 0);
-                
-                if (produtosEstoqueBaixo.length === 0) {
-                    container.style.display = 'none';
-                    return;
-                }
-                
-                container.style.display = 'block';
-                listContainer.innerHTML = `
-                    <div class="low-stock-list">
-                        ${produtosEstoqueBaixo.map(produto => `
-                            <div class="low-stock-item">
-                                <div class="low-stock-emoji">${produto.emoji}</div>
-                                <div class="low-stock-info">
-                                    <div class="low-stock-name">${produto.nome}</div>
-                                    <div class="low-stock-quantity">
-                                        <i class="fas fa-exclamation-triangle warning-icon"></i>
-                                        Apenas ${produto.estoque} unidades
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } catch (error) {
-                console.error('Erro ao carregar estoque baixo:', error);
-            }
-        }
-        
-        async function updateSystemInfo() {
-            try {
-                const produtos = await obterTodosProdutos();
-                const vendas = await obterVendas({});
-                const faturamentoTotal = vendas.reduce((sum, v) => sum + (v.total || 0), 0);
-                
-                document.getElementById('totalProducts').textContent = produtos.length;
-                document.getElementById('totalSales').textContent = vendas.length;
-                document.getElementById('totalRevenue').textContent = `R$ ${faturamentoTotal.toFixed(2)}`;
-            } catch (error) {
-                console.error('Erro ao atualizar informações do sistema:', error);
-            }
-        }
-        
-        // ===== FUNÇÕES DE CONFIGURAÇÃO =====
-        async function backupData() {
-            try {
-                // Obter todos os dados
-                const produtos = await obterTodosProdutos();
-                const vendas = await obterVendas({});
-                
-                const backup = {
-                    timestamp: new Date().toISOString(),
-                    produtos: produtos,
-                    vendas: vendas
-                };
-                
-                // Criar arquivo JSON
-                const dataStr = JSON.stringify(backup, null, 2);
-                const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                
-                // Criar link de download
-                const link = document.createElement('a');
-                link.setAttribute('href', dataUri);
-                link.setAttribute('download', `backup_sorveteria_${new Date().toISOString().split('T')[0]}.json`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showNotification('✅ Backup criado com sucesso!', 'success');
-            } catch (error) {
-                console.error('Erro ao fazer backup:', error);
-                showNotification('❌ Erro ao criar backup', 'error');
-            }
-        }
-        
-        // ===== FUNÇÕES AUXILIARES =====
-        function updateDateTime() {
-            try {
-                const now = new Date();
-                const optionsDate = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                document.getElementById('currentDate').textContent = now.toLocaleDateString('pt-BR', optionsDate);
-                
-                const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-                document.getElementById('currentTime').textContent = now.toLocaleTimeString('pt-BR', optionsTime);
-            } catch (error) {
-                console.error('Erro ao atualizar data/hora:', error);
-            }
-        }
-        
-        function showNotification(mensagem, tipo = 'info') {
-            try {
-                const notification = document.getElementById('notification');
-                notification.textContent = mensagem;
-                notification.className = `notification ${tipo} show`;
-                
-                // Auto-remover após 3 segundos
-                setTimeout(() => {
-                    notification.classList.remove('show');
-                }, 3000);
-            } catch (error) {
-                console.error('Erro ao mostrar notificação:', error);
-            }
-        }
-        
-        function navigateTo(pageId) {
-            // Atualizar navegação
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.classList.remove('active');
-                if (tab.dataset.page === pageId) {
-                    tab.classList.add('active');
-                }
-            });
-            
-            // Atualizar conteúdo
-            document.querySelectorAll('.page').forEach(page => {
-                page.classList.remove('active');
-                if (page.id === pageId) {
-                    page.classList.add('active');
-                }
-            });
-            
-            // Atualizar dados específicos da página
-            if (pageId === 'dashboard') {
-                loadDashboard();
-            } else if (pageId === 'vendas') {
-                loadProductsForSale();
-            } else if (pageId === 'produtos') {
-                loadProductsList();
-            }
-            
-            // Scroll para o topo
-            window.scrollTo(0, 0);
-        }
-        
-        function closeModal() {
-            document.getElementById('productModal').classList.remove('active');
-        }
-        
-        function initNavigation() {
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    navigateTo(tab.dataset.page);
-                });
-            });
-        }
-        
-        function initComponents() {
-            // Carrinho
-            document.getElementById('finalizeSale').addEventListener('click', finalizeSale);
-            document.getElementById('clearCart').addEventListener('click', clearCart);
-            
-            // Produtos
-            document.getElementById('addProduct').addEventListener('click', () => openProductModal());
-            document.getElementById('saveProduct').addEventListener('click', saveProduct);
-            
-            // Modal
-            document.getElementById('closeModal').addEventListener('click', closeModal);
-            document.getElementById('cancelModal').addEventListener('click', closeModal);
-            
-            // Relatórios
-            document.getElementById('generateReportBtn').addEventListener('click', generateReport);
-            document.getElementById('printReport').addEventListener('click', printReport);
-            
-            // Configurações
-            document.getElementById('backupBtn').addEventListener('click', backupData);
-        }
-        
-        function initEmojiPicker() {
-            const emojis = ['🍦', '🍨', '🍧', '🍫', '🍓', '🍌', '🥭', '🍇', '🍈', '🍒', '🍑', '🥥', '🥝', '🍍', '🥑', '🥤', '🧋', '🍯', '🧁', '🍰'];
-            const picker = document.getElementById('emojiPicker');
-            const selector = document.getElementById('emojiSelector');
-            const selectedEmoji = document.getElementById('selectedEmoji');
-            const hiddenInput = document.getElementById('productEmoji');
-            
-            // Adicionar emojis ao picker
-            emojis.forEach(emoji => {
-                const div = document.createElement('div');
-                div.className = 'emoji-option';
-                div.textContent = emoji;
-                div.addEventListener('click', () => {
-                    selectedEmoji.textContent = emoji;
-                    hiddenInput.value = emoji;
-                    picker.classList.remove('show');
-                });
-                picker.appendChild(div);
-            });
-            
-            // Mostrar/ocultar picker
-            selector.addEventListener('click', (e) => {
-                e.stopPropagation();
-                picker.classList.toggle('show');
-            });
-            
-            // Fechar ao clicar fora
-            document.addEventListener('click', () => {
-                picker.classList.remove('show');
-            });
-        }
-        
-        function initPhotoUpload() {
-            const uploadContainer = document.getElementById('photoUploadContainer');
-            const fileInput = document.getElementById('productPhoto');
-            const preview = document.getElementById('photoPreview');
-            const hiddenInput = document.getElementById('productPhotoData');
-            
-            uploadContainer.addEventListener('click', () => {
-                fileInput.click();
-            });
-            
-            fileInput.addEventListener('change', async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                if (!file.type.startsWith('image/')) {
-                    showNotification('❌ Selecione apenas imagens!', 'error');
-                    return;
-                }
-                
-                if (file.size > 2 * 1024 * 1024) {
-                    showNotification('❌ Imagem muito grande (máx. 2MB)', 'error');
-                    return;
-                }
-                
-                try {
-                    showNotification('📤 Fazendo upload da imagem...', 'info');
-                    
-                    // Converter para Base64
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        preview.src = e.target.result;
-                        preview.classList.add('show');
-                        hiddenInput.value = e.target.result;
-                        showNotification('✅ Imagem carregada com sucesso!', 'success');
-                    };
-                    reader.readAsDataURL(file);
-                    
-                } catch (error) {
-                    console.error('Erro no upload:', error);
-                    showNotification('❌ Erro ao carregar imagem', 'error');
                 }
             });
         }
+    }
+    
+    // ===== UTILITÁRIOS =====
+    function updateDateTime() {
+        const now = new Date();
+        const optionsDate = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('currentDate').textContent = now.toLocaleDateString('pt-BR', optionsDate);
+        document.getElementById('currentTime').textContent = now.toLocaleTimeString('pt-BR');
+    }
+    
+    function showNotification(mensagem, tipo = 'info') {
+        const notification = document.getElementById('notification');
+        notification.textContent = mensagem;
+        notification.className = `notification ${tipo} show`;
         
-        // ===== EXPORTAR FUNÇÕES GLOBAIS =====
-        window.navigateTo = navigateTo;
-        window.openProductModal = openProductModal;
-        window.editProduct = editProduct;
-        window.deleteProduct = deleteProduct;
-        window.addToCart = addToCart;
-        window.removeFromCart = removeFromCart;
-        window.increaseQuantity = increaseQuantity;
-        window.finalizeSale = finalizeSale;
-        window.clearCart = clearCart;
-        
-    </script>
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 3000);
+    }
+    
+    function saveAllData() {
+        localStorage.setItem('chop_produtos', JSON.stringify(produtos));
+        localStorage.setItem('chop_vendas', JSON.stringify(vendas));
+    }
+    
+    // ===== FUNÇÕES GLOBAIS =====
+    window.navigateTo = navigateTo;
+    window.addToCart = addToCart;
+    window.updateCartItem = updateCartItem;
+    window.removeCartItem = removeCartItem;
+    window.clearCart = clearCart;
+    window.editProduct = editProduct;
+    window.deleteProduct = deleteProduct;
+    
+    window.openProductModal = openProductModal;
+    window.closeProductModal = closeProductModal;
+    window.saveProduct = saveProduct;
+</script>
 </body>
 </html>
