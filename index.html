@@ -1907,7 +1907,7 @@
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
-                </tr>
+                </tr> 
             `;
         });
         
@@ -2234,20 +2234,45 @@
         }
     }
     
+//-------------------------------------------------------
 async function updateStatistics() {
     try {
-        const response = await fetch("/api/dashboard");
-        const data = await response.json();
+        const response = await fetch("/api/neon", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                sql: `
+                    SELECT 
+                      (SELECT COUNT(*) FROM produtos) AS total_produtos,
+                      (SELECT COUNT(*) FROM vendas) AS total_vendas,
+                      (SELECT COALESCE(SUM(total),0) FROM vendas) AS faturamento
+                `
+            })
+        });
 
-        document.getElementById("totalProducts").textContent = data.totalProdutos;
-        document.getElementById("totalSales").textContent = data.totalVendas;
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error);
+        }
+
+        const data = result.rows[0];
+
+        document.getElementById("totalProducts").textContent = data.total_produtos;
+        document.getElementById("totalSales").textContent = data.total_vendas;
         document.getElementById("totalRevenue").textContent =
             "R$ " + Number(data.faturamento).toFixed(2);
 
-    } catch (error) {
-        console.error("Erro ao carregar dados do Neon:", error);
+    } catch (err) {
+        console.error("Erro ao buscar dados do Neon:", err);
     }
 }
+
+//-------------------------------------------------------
+
+
 
 updateStatistics();
 
