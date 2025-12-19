@@ -2236,12 +2236,24 @@
     
     // ===== FUNÇÕES ADICIONAIS =====
     function updateStatistics() {
-        document.getElementById('totalProducts')?.textContent = produtos.length;
-        document.getElementById('totalSales')?.textContent = vendas.length;
-        const totalRevenue = vendas.reduce((sum, v) => sum + v.total, 0);
-        document.getElementById('totalRevenue')?.textContent = `R$ ${totalRevenue.toFixed(2)}`;
+    const totalProductsEl = document.getElementById('totalProducts');
+    const totalSalesEl = document.getElementById('totalSales');
+    const totalRevenueEl = document.getElementById('totalRevenue');
+
+    if (totalProductsEl) {
+        totalProductsEl.textContent = produtos.length;
     }
-    
+
+    if (totalSalesEl) {
+        totalSalesEl.textContent = vendas.length;
+    }
+
+    const totalRevenue = vendas.reduce((sum, v) => sum + v.total, 0);
+
+    if (totalRevenueEl) {
+        totalRevenueEl.textContent = `R$ ${totalRevenue.toFixed(2)}`;
+    }
+}
     function updateCharts() {
         const produtosMaisVendidos = [...produtos]
             .filter(p => (p.vendas || 0) > 0)
