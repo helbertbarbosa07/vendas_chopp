@@ -1451,46 +1451,36 @@
         showNotification('Sistema carregado!', 'success');
     });
     
-    function setupNavigation() {
-        const tabs = document.querySelectorAll('.nav-tab');
-        
-        tabs.forEach(tab => {
-            tab.addEventListener('click', function() {
-                const pageId = this.dataset.page;
-                
-                tabs.forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                document.querySelectorAll('.page').forEach(page => {
-                    page.classList.remove('active');
-                });
-                
-                const targetPage = document.getElementById(pageId);
-                if (targetPage) {
-                    targetPage.classList.add('active');
-                    
-                    switch(pageId) {
-                        case 'dashboard':
-                            loadDashboard();
-                            break;
-                        case 'vendas':
-                            loadProductsForSale();
-                            break;
-                        case 'produtos':
-                            loadProductsList();
-                            break;
-                        case 'relatorios':
-                            loadReports();
-                            break;
-                        case 'config':
-                            loadConfig();
-                            break;
-                    }
-                }
+   function setupNavigation() {
+    const tabs = document.querySelectorAll('.nav-tab');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const pageId = this.dataset.page;
+
+            tabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
             });
+
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+
+                switch(pageId) {
+                    case 'dashboard': loadDashboard(); break;
+                    case 'vendas': loadProductsForSale(); break;
+                    case 'produtos': loadProductsList(); break;
+                    case 'relatorios': loadReports(); break;
+                    case 'config': loadConfig(); break;
+                }
+            }
         });
-    }
-    
+    });
+}
+
     function setupEventListeners() {
         // Carrinho
         document.getElementById('clearCart')?.addEventListener('click', clearCart);
