@@ -6,74 +6,35 @@
     <title>🍦 Chop Manager PRO - Sistema Completo</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* ... (todo o CSS permanece igual) ... */
+        /* ... SEU CSS EXISTENTE (mantenha tudo igual) ... */
     </style>
 </head>
 <body>
-    
-    
-    <!-- SISTEMA PRINCIPAL -->
-    <div id="appContainer" class="app-container" style="display: none;">
-        <!-- ... (todo o HTML do sistema principal permanece igual) ... -->
-    </div>
-    
-    <!-- MODAIS E NOTIFICAÇÕES (permanecem iguais) ... -->
+    <!-- ... SEU HTML EXISTENTE (mantenha tudo igual) ... -->
     
     <script>
-        // ===== CONFIGURAÇÃO DO SUPABASE =====
-        const SUPABASE_URL = 'https://j8yejg1ybh0e1zsqagvfww-o9d-xz0y.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_j8YEjg1ybH0e1ZSQaGVfww_O9D_XZ0Y';
+        // ===== CONFIGURAÇÃO SUPABASE =====
+        // SUA_URL e SUA_CHAVE serão preenchidas pelo sistema
+        const SUPABASE_URL = '';
+        const SUPABASE_ANON_KEY = '';
         
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        
-        // ===== DADOS DO SISTEMA =====
-        let produtos = [];
-        let vendas = [];
+        let supabase = null;
         let carrinho = [];
         let charts = {};
         
-        // ===== SENHA DO ADMIN =====
-        const ADMIN_PASSWORD_KEY = 'chop_admin_password';
-        const DEFAULT_ADMIN_PASSWORD = 'admin124578';
-        
-        // ===== LISTA DE EMOJIS =====
-        const emojis = [
-            "🍦", "🍨", "🍧", "🍫", "🍓", "🍌", "🍇", "🍎", "🍉", "🍊",
-            "🍋", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑",
-            "🥦", "🥬", "🥒", "🌶", "🫑", "🌽", "🥕", "🫒", "🧄", "🧅",
-            "🥔", "🍠", "🥐", "🥨", "🥯", "🥞", "🧇", "🧀", "🍗", "🍖",
-            "🦴", "🌭", "🍔", "🍟", "🍕", "🫓", "🥪", "🥙", "🧆", "🌮",
-            "🌯", "🫔", "🥗", "🥘", "🫕", "🥫", "🍝", "🍜", "🍲", "🍛",
-            "🍣", "🍱", "🥟", "🦪", "🍤", "🍙", "🍚", "🍘", "🍥", "🥠",
-            "🥮", "🍢", "🍡", "🍧", "🍨", "🍦", "🥧", "🧁", "🍰", "🎂",
-            "🍮", "🍭", "🍬", "🍫", "🍿", "🍩", "🍪", "🌰", "🥜", "🍯"
-        ];
-        
         // ===== INICIALIZAÇÃO =====
         document.addEventListener('DOMContentLoaded', async function() {
+            // Solicitar credenciais do Supabase
+            await solicitarCredenciais();
+            
+            // Inicializar Supabase
+            await initSupabase();
+            
             // Inicializar data/hora
             updateDateTime();
             setInterval(updateDateTime, 1000);
-            
-            // Verificar se o usuário já está logado
-            checkLoginStatus();
-            
-            // Configurar eventos de login
-            document.getElementById('loginForm').addEventListener('submit', handleLogin);
-            document.getElementById('resetPasswordBtn').addEventListener('click', showPasswordResetModalFromLogin);
-            
-            // Configurar logout
-            document.getElementById('logoutBtn').addEventListener('click', logout);
-            
-            // Configurar modal de senha
-            document.getElementById('changePasswordBtn').addEventListener('click', showPasswordResetModal);
-            document.getElementById('closePasswordModal').addEventListener('click', closePasswordResetModal);
-            document.getElementById('cancelPasswordModal').addEventListener('click', closePasswordResetModal);
-            document.getElementById('savePassword').addEventListener('click', updatePassword);
             
             // Inicializar navegação
             initNavigation();
@@ -81,316 +42,266 @@
             // Inicializar componentes
             initComponents();
             
-            // Inicializar picker de emojis
+            // Carregar dados iniciais
+            await loadDashboard();
+            await loadProductsForSale();
+            await loadProductsList();
             initEmojiPicker();
-            
-            // Inicializar upload de foto
             initPhotoUpload();
+            
+            // Configurar listeners
+            document.getElementById('reportPeriod').addEventListener('change', function() {
+                const customRange = document.getElementById('customDateRange');
+                customRange.style.display = this.value === 'personalizado' ? 'flex' : 'none';
+            });
+            
+            document.getElementById('productFilter').addEventListener('change', loadProductsList);
+            document.getElementById('productSearch').addEventListener('input', loadProductsList);
         });
         
-        // ===== AUTENTICAÇÃO =====
-        function checkLoginStatus() {
-            const isLoggedIn = localStorage.getItem('chop_logged_in') === 'true';
-            if (isLoggedIn) {
-                showApp();
-            }
-        }
-        
-        function handleLogin(e) {
-            e.preventDefault();
+        // ===== FUNÇÃO PARA SOLICITAR CREDENCIAIS DO SUPABASE =====
+        async function solicitarCredenciais() {
+            // Verificar se já temos credenciais salvas
+            const savedUrl = localStorage.getItem('supabase_url');
+            const savedKey = localStorage.getItem('supabase_key');
             
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            // Verificar credenciais
-            const adminPassword = localStorage.getItem(ADMIN_PASSWORD_KEY) || DEFAULT_ADMIN_PASSWORD;
-            
-            if (username === 'admin' && password === adminPassword) {
-                localStorage.setItem('chop_logged_in', 'true');
-                showApp();
-                showNotification('Login realizado com sucesso!', 'success');
-            } else {
-                document.getElementById('loginError').classList.add('show');
-                setTimeout(() => {
-                    document.getElementById('loginError').classList.remove('show');
-                }, 3000);
-            }
-        }
-        
-        function logout() {
-            localStorage.removeItem('chop_logged_in');
-            hideApp();
-            document.getElementById('loginForm').reset();
-            document.getElementById('loginUsername').value = 'admin';
-            document.getElementById('loginError').classList.remove('show');
-            showNotification('Logout realizado com sucesso!', 'info');
-        }
-        
-        function showApp() {
-            document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('appContainer').style.display = 'flex';
-            
-            // Carregar dados do Supabase
-            loadDataFromSupabase();
-        }
-        
-        function hideApp() {
-            document.getElementById('loginPage').style.display = 'flex';
-            document.getElementById('appContainer').style.display = 'none';
-        }
-        
-        // ===== GERENCIAMENTO DE SENHA =====
-        function showPasswordResetModalFromLogin() {
-            // Modal para redefinir senha sem estar logado
-            const modal = document.getElementById('passwordResetModal');
-            modal.classList.add('active');
-            document.getElementById('currentPassword').style.display = 'none';
-            document.getElementById('currentPassword').closest('.form-group').style.display = 'none';
-            document.getElementById('passwordForm').reset();
-            document.getElementById('passwordError').style.display = 'none';
-        }
-        
-        function showPasswordResetModal() {
-            const modal = document.getElementById('passwordResetModal');
-            modal.classList.add('active');
-            document.getElementById('currentPassword').style.display = 'block';
-            document.getElementById('currentPassword').closest('.form-group').style.display = 'block';
-            document.getElementById('passwordForm').reset();
-            document.getElementById('passwordError').style.display = 'none';
-        }
-        
-        function closePasswordResetModal() {
-            const modal = document.getElementById('passwordResetModal');
-            modal.classList.remove('active');
-        }
-        
-        function updatePassword() {
-            const currentPasswordInput = document.getElementById('currentPassword');
-            const currentPassword = currentPasswordInput.value;
-            const newPassword = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
-            const errorDiv = document.getElementById('passwordError');
-            
-            errorDiv.style.display = 'none';
-            
-            // Verificar se está na tela de login (sem senha atual)
-            const isFromLogin = currentPasswordInput.closest('.form-group').style.display === 'none';
-            
-            if (!isFromLogin) {
-                // Verificar senha atual apenas se não for da tela de login
-                const adminPassword = localStorage.getItem(ADMIN_PASSWORD_KEY) || DEFAULT_ADMIN_PASSWORD;
-                if (currentPassword !== adminPassword) {
-                    errorDiv.textContent = 'Senha atual incorreta!';
-                    errorDiv.style.display = 'block';
-                    return;
-                }
-            }
-            
-            // Validações da nova senha
-            if (newPassword.length < 6) {
-                errorDiv.textContent = 'A nova senha deve ter pelo menos 6 caracteres!';
-                errorDiv.style.display = 'block';
+            if (savedUrl && savedKey) {
+                SUPABASE_URL = savedUrl;
+                SUPABASE_ANON_KEY = savedKey;
                 return;
             }
             
-            if (newPassword !== confirmPassword) {
-                errorDiv.textContent = 'As senhas não coincidem!';
-                errorDiv.style.display = 'block';
+            // Se não tem credenciais, mostrar modal
+            const url = prompt('🔑 Insira a URL do seu Supabase:');
+            if (!url) {
+                alert('É necessário configurar o Supabase para usar o sistema!');
+                location.reload();
                 return;
             }
             
-            // Salvar nova senha
-            localStorage.setItem(ADMIN_PASSWORD_KEY, newPassword);
-            
-            closePasswordResetModal();
-            showNotification('Senha alterada com sucesso!', 'success');
-            
-            // Se estava na tela de login, limpar os campos
-            if (isFromLogin) {
-                document.getElementById('loginForm').reset();
-                document.getElementById('loginUsername').value = 'admin';
+            const key = prompt('🔐 Insira a chave anônima do seu Supabase:');
+            if (!key) {
+                alert('É necessário configurar o Supabase para usar o sistema!');
+                location.reload();
+                return;
             }
+            
+            // Salvar credenciais
+            localStorage.setItem('supabase_url', url);
+            localStorage.setItem('supabase_key', key);
+            
+            SUPABASE_URL = url;
+            SUPABASE_ANON_KEY = key;
+            
+            showNotification('✅ Supabase configurado com sucesso!', 'success');
         }
         
-        // ===== SUPABASE INTEGRATION =====
-        async function loadDataFromSupabase() {
+        // ===== INICIALIZAR SUPABASE =====
+        async function initSupabase() {
             try {
-                showNotification('Carregando dados do banco de dados...', 'info');
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 
-                // Carregar produtos
-                const { data: produtosData, error: produtosError } = await supabase
+                // Testar conexão
+                const { data, error } = await supabase
                     .from('produtos')
-                    .select('*')
-                    .order('id', { ascending: true });
+                    .select('count')
+                    .limit(1);
                 
-                if (produtosError) throw produtosError;
-                
-                produtos = produtosData || [];
-                
-                // Carregar vendas
-                const { data: vendasData, error: vendasError } = await supabase
-                    .from('vendas')
-                    .select('*')
-                    .order('data', { ascending: false })
-                    .order('hora', { ascending: false });
-                
-                if (vendasError) throw vendasError;
-                
-                vendas = vendasData || [];
-                
-                // Se não houver dados, criar alguns exemplos
-                if (produtos.length === 0) {
-                    await createSampleProducts();
-                }
-                
-                // Carregar dados iniciais
-                loadDashboard();
-                loadProductsForSale();
-                loadProductsList();
-                
-                showNotification('Sistema carregado com sucesso!', 'success');
-            } catch (error) {
-                console.error('Erro ao carregar dados do Supabase:', error);
-                showNotification('Erro ao carregar dados. Verifique a conexão.', 'error');
-                
-                // Usar dados locais como fallback
-                loadLocalFallbackData();
-            }
-        }
-        
-        async function createSampleProducts() {
-            const sampleProducts = [
-                {
-                    id: Date.now(),
-                    nome: "Casquinha Chocolate",
-                    descricao: "Casquinha tradicional de chocolate",
-                    preco: 5.00,
-                    estoque: 50,
-                    emoji: "🍫",
-                    cor: "#8B4513",
-                    ativo: true,
-                    vendas: 0,
-                    foto: null
-                },
-                {
-                    id: Date.now() + 1,
-                    nome: "Casquinha Morango",
-                    descricao: "Casquinha cremosa de morango",
-                    preco: 5.00,
-                    estoque: 45,
-                    emoji: "🍓",
-                    cor: "#FF7BAC",
-                    ativo: true,
-                    vendas: 0,
-                    foto: null
-                },
-                {
-                    id: Date.now() + 2,
-                    nome: "Pote 500ml",
-                    descricao: "Pote de sorvete 500ml",
-                    preco: 15.00,
-                    estoque: 30,
-                    emoji: "🍨",
-                    cor: "#36B5B0",
-                    ativo: true,
-                    vendas: 0,
-                    foto: null
-                },
-                {
-                    id: Date.now() + 3,
-                    nome: "Milkshake",
-                    descricao: "Milkshake cremoso",
-                    preco: 12.00,
-                    estoque: 40,
-                    emoji: "🥤",
-                    cor: "#FFD166",
-                    ativo: true,
-                    vendas: 0,
-                    foto: null
-                }
-            ];
-            
-            try {
-                for (const produto of sampleProducts) {
-                    const { error } = await supabase
-                        .from('produtos')
-                        .insert([produto]);
+                if (error) {
+                    console.error('Erro ao conectar com Supabase:', error);
                     
-                    if (error) throw error;
-                }
-                
-                produtos = sampleProducts;
-                showNotification('Produtos de exemplo criados!', 'success');
-            } catch (error) {
-                console.error('Erro ao criar produtos de exemplo:', error);
-            }
-        }
-        
-        function loadLocalFallbackData() {
-            // Dados locais de fallback
-            produtos = [
-                {
-                    id: 1,
-                    nome: "Casquinha Chocolate",
-                    descricao: "Casquinha tradicional de chocolate",
-                    preco: 5.00,
-                    estoque: 50,
-                    emoji: "🍫",
-                    cor: "#8B4513",
-                    ativo: true,
-                    vendas: 12,
-                    foto: null
-                },
-                {
-                    id: 2,
-                    nome: "Casquinha Morango",
-                    descricao: "Casquinha cremosa de morango",
-                    preco: 5.00,
-                    estoque: 45,
-                    emoji: "🍓",
-                    cor: "#FF7BAC",
-                    ativo: true,
-                    vendas: 18,
-                    foto: null
-                }
-            ];
-            
-            vendas = [];
-            
-            loadDashboard();
-            loadProductsForSale();
-            loadProductsList();
-            showNotification('Usando dados locais (modo offline)', 'warning');
-        }
-        
-        async function saveProductToSupabase(produto) {
-            try {
-                if (produto.id) {
-                    // Atualizar produto existente
-                    const { error } = await supabase
-                        .from('produtos')
-                        .update(produto)
-                        .eq('id', produto.id);
-                    
-                    if (error) throw error;
+                    // Tentar criar tabelas automaticamente
+                    await criarTabelasSupabase();
                 } else {
-                    // Inserir novo produto
-                    produto.id = Date.now();
-                    const { error } = await supabase
-                        .from('produtos')
-                        .insert([produto]);
-                    
-                    if (error) throw error;
+                    console.log('✅ Conexão com Supabase estabelecida!');
+                    showNotification('✅ Conectado ao banco de dados', 'success');
                 }
                 
                 return true;
             } catch (error) {
-                console.error('Erro ao salvar produto no Supabase:', error);
+                console.error('Erro ao inicializar Supabase:', error);
+                showNotification('❌ Erro ao conectar com Supabase', 'error');
                 return false;
             }
         }
         
-        async function deleteProductFromSupabase(id) {
+        // ===== CRIAR TABELAS NO SUPABASE =====
+        async function criarTabelasSupabase() {
+            showNotification('🔄 Criando estrutura do banco de dados...', 'info');
+            
+            // Nota: No Supabase, você precisa criar as tabelas via SQL ou interface web
+            // Aqui vamos apenas mostrar as instruções SQL
+            
+            const sqlInstructions = `
+            -- 1. Criar tabela de produtos
+            CREATE TABLE produtos (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                nome TEXT NOT NULL,
+                descricao TEXT,
+                preco DECIMAL(10,2) NOT NULL,
+                estoque INTEGER DEFAULT 0,
+                emoji TEXT DEFAULT '🍦',
+                cor TEXT DEFAULT '#36B5B0',
+                ativo BOOLEAN DEFAULT true,
+                vendas INTEGER DEFAULT 0,
+                categoria TEXT,
+                foto TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+            );
+            
+            -- 2. Criar tabela de vendas
+            CREATE TABLE vendas (
+                id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                data DATE NOT NULL,
+                hora TIME NOT NULL,
+                itens JSONB NOT NULL,
+                total DECIMAL(10,2) NOT NULL,
+                pagamento TEXT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+            );
+            
+            -- 3. Criar tabela de configurações
+            CREATE TABLE configuracoes (
+                chave TEXT PRIMARY KEY,
+                valor TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+            );
+            
+            -- 4. Inserir produtos iniciais
+            INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, categoria) VALUES
+            ('Casquinha Chocolate', 'Casquinha tradicional de chocolate', 5.00, 50, '🍫', '#8B4513', 'casquinha'),
+            ('Casquinha Morango', 'Casquinha cremosa de morango', 5.00, 40, '🍓', '#FF7BAC', 'casquinha'),
+            ('Pote 500ml', 'Pote de sorvete 500ml', 15.00, 30, '🍨', '#36B5B0', 'pote'),
+            ('Milkshake', 'Milkshake cremoso', 12.00, 25, '🥤', '#FFD166', 'bebida');
+            `;
+            
+            alert(`
+            ⚠️ Configuração do Banco de Dados ⚠️
+            
+            Para usar o sistema, você precisa criar as tabelas no Supabase.
+            
+            Acesse seu projeto Supabase:
+            1. Vá para SQL Editor
+            2. Cole o SQL abaixo:
+            
+            ${sqlInstructions}
+            
+            3. Execute o SQL
+            4. Recarregue esta página
+            
+            Ou contate o administrador do sistema.
+            `);
+            
+            return false;
+        }
+        
+        // ===== FUNÇÕES CRUD SUPABASE =====
+        
+        // PRODUTOS
+        async function salvarProduto(produto) {
+            try {
+                if (produto.id) {
+                    // Atualizar produto existente
+                    const { data, error } = await supabase
+                        .from('produtos')
+                        .update({
+                            nome: produto.nome,
+                            descricao: produto.descricao,
+                            preco: produto.preco,
+                            estoque: produto.estoque,
+                            emoji: produto.emoji,
+                            cor: produto.cor,
+                            ativo: produto.ativo,
+                            categoria: produto.categoria,
+                            foto: produto.foto,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', produto.id)
+                        .select();
+                    
+                    if (error) throw error;
+                    return data[0];
+                } else {
+                    // Criar novo produto
+                    const { data, error } = await supabase
+                        .from('produtos')
+                        .insert([{
+                            nome: produto.nome,
+                            descricao: produto.descricao,
+                            preco: produto.preco,
+                            estoque: produto.estoque,
+                            emoji: produto.emoji,
+                            cor: produto.cor,
+                            ativo: produto.ativo,
+                            vendas: 0,
+                            categoria: produto.categoria || 'geral',
+                            foto: produto.foto
+                        }])
+                        .select();
+                    
+                    if (error) throw error;
+                    return data[0];
+                }
+            } catch (error) {
+                console.error('Erro ao salvar produto:', error);
+                showNotification('❌ Erro ao salvar produto', 'error');
+                return null;
+            }
+        }
+        
+        async function obterProduto(id) {
+            try {
+                const { data, error } = await supabase
+                    .from('produtos')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Erro ao obter produto:', error);
+                return null;
+            }
+        }
+        
+        async function obterTodosProdutos(filtro = {}) {
+            try {
+                let query = supabase.from('produtos').select('*');
+                
+                // Aplicar filtros
+                if (filtro.ativos !== undefined) {
+                    query = query.eq('ativo', filtro.ativos);
+                }
+                
+                if (filtro.estoqueBaixo) {
+                    query = query.lt('estoque', 10);
+                }
+                
+                if (filtro.categoria) {
+                    query = query.eq('categoria', filtro.categoria);
+                }
+                
+                if (filtro.busca) {
+                    query = query.or(`nome.ilike.%${filtro.busca}%,descricao.ilike.%${filtro.busca}%`);
+                }
+                
+                // Ordenar por nome
+                query = query.order('nome', { ascending: true });
+                
+                const { data, error } = await query;
+                
+                if (error) throw error;
+                return data || [];
+            } catch (error) {
+                console.error('Erro ao obter produtos:', error);
+                showNotification('❌ Erro ao carregar produtos', 'error');
+                return [];
+            }
+        }
+        
+        async function excluirProduto(id) {
             try {
                 const { error } = await supabase
                     .from('produtos')
@@ -400,425 +311,168 @@
                 if (error) throw error;
                 return true;
             } catch (error) {
-                console.error('Erro ao excluir produto do Supabase:', error);
+                console.error('Erro ao excluir produto:', error);
+                showNotification('❌ Erro ao excluir produto', 'error');
                 return false;
             }
         }
         
-        async function saveSaleToSupabase(venda) {
+        // VENDAS
+        async function salvarVenda(venda) {
             try {
-                const { error } = await supabase
+                // Primeiro, salvar a venda
+                const { data: vendaSalva, error: vendaError } = await supabase
                     .from('vendas')
-                    .insert([venda]);
+                    .insert([{
+                        data: venda.data,
+                        hora: venda.hora,
+                        itens: venda.itens,
+                        total: venda.total,
+                        pagamento: venda.pagamento
+                    }])
+                    .select();
                 
-                if (error) throw error;
-                return true;
-            } catch (error) {
-                console.error('Erro ao salvar venda no Supabase:', error);
-                return false;
-            }
-        }
-        
-        async function updateProductStockInSupabase(id, estoque, vendasCount) {
-            try {
-                const { error } = await supabase
-                    .from('produtos')
-                    .update({ 
-                        estoque: estoque,
-                        vendas: vendasCount 
-                    })
-                    .eq('id', id);
+                if (vendaError) throw vendaError;
                 
-                if (error) throw error;
-                return true;
-            } catch (error) {
-                console.error('Erro ao atualizar estoque no Supabase:', error);
-                return false;
-            }
-        }
-        
-        // ===== INICIALIZAÇÃO DE COMPONENTES =====
-        function initNavigation() {
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.addEventListener('click', function() {
-                    const pageId = this.dataset.page;
-                    navigateTo(pageId);
-                });
-            });
-        }
-        
-        function initComponents() {
-            // Carrinho
-            document.getElementById('clearCart').addEventListener('click', clearCart);
-            document.getElementById('finalizeSale').addEventListener('click', finalizeSale);
-            
-            // Modal de produtos
-            document.getElementById('addProduct').addEventListener('click', () => openProductModal());
-            document.getElementById('closeModal').addEventListener('click', closeProductModal);
-            document.getElementById('cancelModal').addEventListener('click', closeProductModal);
-            document.getElementById('saveProduct').addEventListener('click', saveProduct);
-            
-            // Relatórios
-            document.getElementById('generateReportBtn').addEventListener('click', generateReport);
-            document.getElementById('printReport').addEventListener('click', printReport);
-            
-            // Configurações
-            document.getElementById('backupBtn').addEventListener('click', backupData);
-            
-            // Formas de pagamento
-            document.querySelectorAll('input[name="payment"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    const paymentCard = this.parentElement.querySelector('.payment-card');
-                    paymentCard.style.borderColor = '#4CAF50';
-                    setTimeout(() => {
-                        if (!this.checked) paymentCard.style.borderColor = '#dee2e6';
-                    }, 500);
-                });
-            });
-            
-            // Filtros
-            document.getElementById('reportPeriod').addEventListener('change', function() {
-                const customRange = document.getElementById('customDateRange');
-                customRange.style.display = this.value === 'personalizado' ? 'flex' : 'none';
-            });
-            
-            document.getElementById('productFilter').addEventListener('change', loadProductsList);
-            document.getElementById('productSearch').addEventListener('input', loadProductsList);
-        }
-        
-        function initEmojiPicker() {
-            const picker = document.getElementById('emojiPicker');
-            emojis.forEach(emoji => {
-                const span = document.createElement('span');
-                span.className = 'emoji-option';
-                span.textContent = emoji;
-                span.addEventListener('click', () => selectEmoji(emoji));
-                picker.appendChild(span);
-            });
-            
-            document.getElementById('emojiSelector').addEventListener('click', function(e) {
-                e.stopPropagation();
-                const picker = document.getElementById('emojiPicker');
-                picker.classList.toggle('show');
-            });
-            
-            document.addEventListener('click', function() {
-                const picker = document.getElementById('emojiPicker');
-                picker.classList.remove('show');
-            });
-        }
-        
-        function initPhotoUpload() {
-            const uploadContainer = document.getElementById('photoUploadContainer');
-            const fileInput = document.getElementById('productPhoto');
-            const preview = document.getElementById('photoPreview');
-            
-            uploadContainer.addEventListener('click', () => fileInput.click());
-            
-            fileInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                if (file.size > 2 * 1024 * 1024) {
-                    showNotification('A imagem deve ter no máximo 2MB!', 'error');
-                    return;
+                // Atualizar estoque e contador de vendas de cada produto
+                for (const item of venda.itens) {
+                    // Obter produto atual
+                    const { data: produto, error: produtoError } = await supabase
+                        .from('produtos')
+                        .select('*')
+                        .eq('id', item.produtoId)
+                        .single();
+                    
+                    if (produtoError) throw produtoError;
+                    
+                    // Atualizar produto
+                    const { error: updateError } = await supabase
+                        .from('produtos')
+                        .update({
+                            estoque: produto.estoque - item.quantidade,
+                            vendas: (produto.vendas || 0) + item.quantidade,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', item.produtoId);
+                    
+                    if (updateError) throw updateError;
                 }
                 
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.classList.add('show');
-                    document.getElementById('productPhotoData').value = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        
-        function selectEmoji(emoji) {
-            document.getElementById('selectedEmoji').textContent = emoji;
-            document.getElementById('productEmoji').value = emoji;
-            document.getElementById('emojiPicker').classList.remove('show');
-        }
-        
-        // ===== NAVEGAÇÃO =====
-        function navigateTo(pageId) {
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-            
-            document.querySelector(`.nav-tab[data-page="${pageId}"]`).classList.add('active');
-            document.getElementById(pageId).classList.add('active');
-            
-            switch(pageId) {
-                case 'dashboard': 
-                    loadDashboard(); 
-                    break;
-                case 'vendas': 
-                    loadProductsForSale(); 
-                    break;
-                case 'produtos': 
-                    loadProductsList(); 
-                    break;
-                case 'relatorios': 
-                    generateReport(); 
-                    break;
-                case 'config': 
-                    loadConfigInfo(); 
-                    break;
+                return vendaSalva[0];
+            } catch (error) {
+                console.error('Erro ao salvar venda:', error);
+                showNotification('❌ Erro ao salvar venda', 'error');
+                return null;
             }
         }
         
-        // ===== DASHBOARD =====
+        async function obterVendas(filtro = {}) {
+            try {
+                let query = supabase.from('vendas').select('*');
+                
+                // Aplicar filtros de data
+                if (filtro.dataInicio && filtro.dataFim) {
+                    query = query.gte('data', filtro.dataInicio).lte('data', filtro.dataFim);
+                } else if (filtro.data) {
+                    query = query.eq('data', filtro.data);
+                }
+                
+                // Filtrar por forma de pagamento
+                if (filtro.pagamento) {
+                    query = query.eq('pagamento', filtro.pagamento);
+                }
+                
+                // Ordenar por data mais recente
+                query = query.order('created_at', { ascending: false });
+                
+                const { data, error } = await query;
+                
+                if (error) throw error;
+                return data || [];
+            } catch (error) {
+                console.error('Erro ao obter vendas:', error);
+                return [];
+            }
+        }
+        
+        // CONFIGURAÇÕES
+        async function salvarConfig(chave, valor) {
+            try {
+                const { error } = await supabase
+                    .from('configuracoes')
+                    .upsert({ chave, valor }, { onConflict: 'chave' });
+                
+                if (error) throw error;
+                return true;
+            } catch (error) {
+                console.error('Erro ao salvar configuração:', error);
+                return false;
+            }
+        }
+        
+        async function obterConfig(chave) {
+            try {
+                const { data, error } = await supabase
+                    .from('configuracoes')
+                    .select('valor')
+                    .eq('chave', chave)
+                    .single();
+                
+                if (error) throw error;
+                return data?.valor || null;
+            } catch (error) {
+                console.error('Erro ao obter configuração:', error);
+                return null;
+            }
+        }
+        
+        // ===== FUNÇÕES DO SISTEMA (ATUALIZADAS PARA SUPABASE) =====
+        
         async function loadDashboard() {
             try {
                 const hoje = new Date().toISOString().split('T')[0];
-                const vendasHoje = vendas.filter(v => v.data === hoje);
+                const vendasHoje = await obterVendas({ data: hoje });
                 
+                // Calcular estatísticas
                 const faturamentoHoje = vendasHoje.reduce((sum, v) => sum + v.total, 0);
                 const chopsHoje = vendasHoje.reduce((sum, v) => 
                     sum + v.itens.reduce((s, i) => s + i.quantidade, 0), 0);
                 const mediaVenda = vendasHoje.length > 0 ? faturamentoHoje / vendasHoje.length : 0;
-                const estoqueBaixo = produtos.filter(p => p.estoque < 10 && p.ativo).length;
                 
+                const produtosAtivos = await obterTodosProdutos({ ativos: true });
+                const estoqueBaixo = produtosAtivos.filter(p => p.estoque < 10).length;
+                
+                // Atualizar estatísticas
                 document.getElementById('todayRevenue').textContent = `R$ ${faturamentoHoje.toFixed(2)}`;
                 document.getElementById('todayChops').textContent = chopsHoje;
                 document.getElementById('avgSale').textContent = `R$ ${mediaVenda.toFixed(2)}`;
                 document.getElementById('lowStock').textContent = estoqueBaixo;
                 
-                updateCharts();
-                loadRecentSales();
-                loadTopProducts();
-                loadLowStockProducts();
+                // Atualizar gráficos
+                updateCharts(vendasHoje, produtosAtivos);
+                
+                // Carregar últimas vendas
+                loadRecentSales(vendasHoje);
+                
+                // Carregar produtos mais vendidos
+                loadTopProducts(produtosAtivos);
+                
+                // Carregar estoque baixo
+                loadLowStockProducts(produtosAtivos);
+                
             } catch (error) {
                 console.error('Erro ao carregar dashboard:', error);
+                showNotification('Erro ao carregar dashboard', 'error');
             }
         }
         
-        function updateCharts() {
-            try {
-                const hoje = new Date().toISOString().split('T')[0];
-                const vendasHoje = vendas.filter(v => v.data === hoje);
-                
-                // Gráfico de pizza
-                const vendasPorProduto = {};
-                vendasHoje.forEach(venda => {
-                    venda.itens.forEach(item => {
-                        if (!vendasPorProduto[item.nome]) {
-                            vendasPorProduto[item.nome] = 0;
-                        }
-                        vendasPorProduto[item.nome] += item.quantidade;
-                    });
-                });
-                
-                const ctx1 = document.getElementById('flavorsChart');
-                if (ctx1) {
-                    if (charts.flavors) charts.flavors.destroy();
-                    
-                    if (Object.keys(vendasPorProduto).length > 0) {
-                        charts.flavors = new Chart(ctx1.getContext('2d'), {
-                            type: 'pie',
-                            data: {
-                                labels: Object.keys(vendasPorProduto),
-                                datasets: [{
-                                    data: Object.values(vendasPorProduto),
-                                    backgroundColor: Object.keys(vendasPorProduto).map(nome => {
-                                        const produto = produtos.find(p => p.nome === nome);
-                                        return produto ? produto.cor : '#CCCCCC';
-                                    }),
-                                    borderWidth: 2
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                plugins: {
-                                    legend: { position: 'bottom' }
-                                }
-                            }
-                        });
-                    }
-                }
-                
-                // Gráfico de linha
-                const ultimos7Dias = [];
-                const vendasPorDia = [];
-                
-                for (let i = 6; i >= 0; i--) {
-                    const data = new Date();
-                    data.setDate(data.getDate() - i);
-                    const dataStr = data.toISOString().split('T')[0];
-                    ultimos7Dias.push(formatarData(dataStr));
-                    
-                    const vendasDia = vendas.filter(v => v.data === dataStr);
-                    const totalDia = vendasDia.reduce((sum, v) => sum + v.total, 0);
-                    vendasPorDia.push(totalDia);
-                }
-                
-                const ctx2 = document.getElementById('weeklyChart');
-                if (ctx2) {
-                    if (charts.weekly) charts.weekly.destroy();
-                    
-                    charts.weekly = new Chart(ctx2.getContext('2d'), {
-                        type: 'line',
-                        data: {
-                            labels: ultimos7Dias,
-                            datasets: [{
-                                label: 'Faturamento (R$)',
-                                data: vendasPorDia,
-                                borderColor: '#36B5B0',
-                                backgroundColor: 'rgba(54, 181, 176, 0.1)',
-                                borderWidth: 3,
-                                fill: true,
-                                tension: 0.4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            scales: {
-                                y: { beginAtZero: true }
-                            }
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Erro ao atualizar gráficos:', error);
-            }
-        }
-        
-        function loadRecentSales() {
-            try {
-                const container = document.getElementById('recentSalesList');
-                const recentSales = [...vendas].sort((a, b) => b.id - a.id).slice(0, 5);
-                
-                if (recentSales.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-sales">
-                            <i class="fas fa-shopping-cart"></i>
-                            <p>Nenhuma venda realizada hoje</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                let html = '<table class="sales-table">';
-                html += `
-                    <thead>
-                        <tr>
-                            <th>Hora</th>
-                            <th>Itens</th>
-                            <th>Total</th>
-                            <th>Pagamento</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                `;
-                
-                recentSales.forEach(venda => {
-                    const itemsText = venda.itens.map(i => `${i.quantidade}x ${i.nome}`).join(', ');
-                    const paymentClass = `payment-${venda.pagamento}`;
-                    
-                    html += `
-                        <tr>
-                            <td>${venda.hora}</td>
-                            <td>${itemsText}</td>
-                            <td><strong>R$ ${venda.total.toFixed(2)}</strong></td>
-                            <td><span class="payment-badge ${paymentClass}">${venda.pagamento.toUpperCase()}</span></td>
-                        </tr>
-                    `;
-                });
-                
-                html += '</tbody></table>';
-                container.innerHTML = html;
-            } catch (error) {
-                console.error('Erro ao carregar últimas vendas:', error);
-            }
-        }
-        
-        function loadTopProducts() {
-            try {
-                const container = document.getElementById('topProductsList');
-                const topProducts = [...produtos]
-                    .filter(p => p.ativo)
-                    .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
-                    .slice(0, 5);
-                
-                if (topProducts.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-sales">
-                            <i class="fas fa-chart-bar"></i>
-                            <p>Nenhum produto vendido ainda</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                let html = '<div class="top-products-list">';
-                
-                topProducts.forEach((produto, index) => {
-                    html += `
-                        <div class="top-product-item">
-                            <div class="top-product-emoji">${produto.emoji}</div>
-                            <div class="top-product-info">
-                                <div class="top-product-name">${produto.nome}</div>
-                                <div class="top-product-stats">
-                                    <span>Vendas: ${produto.vendas || 0}</span>
-                                    <span>Estoque: ${produto.estoque}</span>
-                                </div>
-                            </div>
-                            <div class="top-product-rank">${index + 1}</div>
-                        </div>
-                    `;
-                });
-                
-                html += '</div>';
-                container.innerHTML = html;
-            } catch (error) {
-                console.error('Erro ao carregar top produtos:', error);
-            }
-        }
-        
-        function loadLowStockProducts() {
-            try {
-                const container = document.getElementById('lowStockList');
-                const lowStockContainer = document.getElementById('lowStockContainer');
-                const lowStockProducts = produtos.filter(p => p.estoque < 10 && p.ativo);
-                
-                if (lowStockProducts.length === 0) {
-                    lowStockContainer.style.display = 'none';
-                    return;
-                }
-                
-                lowStockContainer.style.display = 'block';
-                
-                let html = '<div class="low-stock-list">';
-                
-                lowStockProducts.forEach(produto => {
-                    html += `
-                        <div class="low-stock-item">
-                            <div class="low-stock-emoji">${produto.emoji}</div>
-                            <div class="low-stock-info">
-                                <div class="low-stock-name">${produto.nome}</div>
-                                <div class="low-stock-quantity">Estoque: ${produto.estoque} unidades</div>
-                            </div>
-                            <div class="warning-icon">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                html += '</div>';
-                container.innerHTML = html;
-            } catch (error) {
-                console.error('Erro ao carregar estoque baixo:', error);
-            }
-        }
-        
-        // ===== VENDAS =====
-        function loadProductsForSale() {
+        async function loadProductsForSale() {
             try {
                 const container = document.getElementById('productsGrid');
-                const produtosAtivos = produtos.filter(p => p.ativo && p.estoque > 0);
+                const produtosAtivos = await obterTodosProdutos({ ativos: true });
+                const produtosDisponiveis = produtosAtivos.filter(p => p.estoque > 0);
                 
-                if (produtosAtivos.length === 0) {
+                if (produtosDisponiveis.length === 0) {
                     container.innerHTML = `
                         <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
                             <i class="fas fa-ice-cream" style="font-size: 50px; margin-bottom: 15px; opacity: 0.3;"></i>
@@ -833,7 +487,7 @@
                 
                 container.innerHTML = '';
                 
-                produtosAtivos.forEach(produto => {
+                produtosDisponiveis.forEach(produto => {
                     const card = document.createElement('div');
                     card.className = 'flavor-card';
                     
@@ -865,263 +519,37 @@
             }
         }
         
-        function addToCart(produto) {
-            try {
-                if (produto.estoque < 1) {
-                    showNotification(`Estoque insuficiente de ${produto.nome}!`, 'error');
-                    return;
-                }
-                
-                const itemExistente = carrinho.find(item => item.produtoId === produto.id);
-                
-                if (itemExistente) {
-                    if (produto.estoque < itemExistente.quantidade + 1) {
-                        showNotification(`Estoque máximo de ${produto.nome} atingido!`, 'error');
-                        return;
-                    }
-                    itemExistente.quantidade += 1;
-                    itemExistente.total = itemExistente.quantidade * itemExistente.preco;
-                } else {
-                    carrinho.push({
-                        produtoId: produto.id,
-                        nome: produto.nome,
-                        preco: produto.preco,
-                        quantidade: 1,
-                        total: produto.preco,
-                        emoji: produto.emoji
-                    });
-                }
-                
-                updateCart();
-                showNotification(`${produto.emoji} ${produto.nome} adicionado!`, 'success');
-            } catch (error) {
-                console.error('Erro ao adicionar ao carrinho:', error);
-                showNotification('Erro ao adicionar produto!', 'error');
-            }
-        }
-        
-        function updateCart() {
-            try {
-                const container = document.getElementById('cartItems');
-                const totalItemsEl = document.getElementById('totalItems');
-                const totalValueEl = document.getElementById('totalValue');
-                const totalToPayEl = document.getElementById('totalToPay');
-                const finalizeBtn = document.getElementById('finalizeSale');
-                
-                if (carrinho.length === 0) {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 30px 20px; color: var(--gray);">
-                            <i class="fas fa-ice-cream" style="font-size: 40px; margin-bottom: 15px; opacity: 0.3;"></i>
-                            <p style="font-size: 16px;">Selecione os produtos para começar</p>
-                        </div>
-                    `;
-                    totalItemsEl.textContent = '0';
-                    totalValueEl.textContent = 'R$ 0,00';
-                    totalToPayEl.textContent = 'R$ 0,00';
-                    finalizeBtn.disabled = true;
-                    return;
-                }
-                
-                let totalItens = 0;
-                let totalValor = 0;
-                
-                carrinho.forEach(item => {
-                    totalItens += item.quantidade;
-                    totalValor += item.total;
-                });
-                
-                totalItemsEl.textContent = totalItens;
-                totalValueEl.textContent = `R$ ${totalValor.toFixed(2)}`;
-                totalToPayEl.textContent = `R$ ${totalValor.toFixed(2)}`;
-                
-                container.innerHTML = '';
-                carrinho.forEach((item, index) => {
-                    const itemEl = document.createElement('div');
-                    itemEl.style.cssText = `
-                        display: flex; justify-content: space-between; align-items: center;
-                        padding: 12px; margin-bottom: 8px; background: #f8f9fa;
-                        border-radius: 12px; transition: all 0.3s;
-                    `;
-                    itemEl.innerHTML = `
-                        <div>
-                            <div style="font-weight: 700; color: var(--dark); font-size: 14px;">${item.emoji} ${item.nome}</div>
-                            <div style="color: var(--gray); font-size: 12px;">R$ ${item.preco.toFixed(2)} cada</div>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <button style="width: 25px; height: 25px; border-radius: 50%; border: 2px solid #dee2e6; background: white; cursor: pointer; font-size: 12px;" data-index="${index}" data-action="decrease">-</button>
-                            <span style="font-weight: 900; font-size: 16px; min-width: 25px; text-align: center;">${item.quantidade}</span>
-                            <button style="width: 25px; height: 25px; border-radius: 50%; border: 2px solid #dee2e6; background: white; cursor: pointer; font-size: 12px;" data-index="${index}" data-action="increase">+</button>
-                            <span style="font-weight: 900; font-size: 16px; color: var(--primary); min-width: 60px; text-align: right;">R$ ${item.total.toFixed(2)}</span>
-                            <button style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px;" data-index="${index}">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    `;
-                    container.appendChild(itemEl);
-                });
-                
-                container.querySelectorAll('button').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const index = parseInt(this.dataset.index);
-                        const action = this.dataset.action;
-                        
-                        if (action === 'increase') {
-                            updateCartItem(index, 'increase');
-                        } else if (action === 'decrease') {
-                            updateCartItem(index, 'decrease');
-                        } else {
-                            removeCartItem(index);
-                        }
-                    });
-                });
-                
-                finalizeBtn.disabled = false;
-            } catch (error) {
-                console.error('Erro ao atualizar carrinho:', error);
-            }
-        }
-        
-        function updateCartItem(index, action) {
-            try {
-                const item = carrinho[index];
-                const produto = produtos.find(p => p.id === item.produtoId);
-                
-                if (action === 'increase') {
-                    if (item.quantidade >= produto.estoque) {
-                        showNotification(`Estoque máximo atingido!`, 'error');
-                        return;
-                    }
-                    item.quantidade += 1;
-                } else if (action === 'decrease') {
-                    if (item.quantidade <= 1) {
-                        carrinho.splice(index, 1);
-                    } else {
-                        item.quantidade -= 1;
-                    }
-                }
-                
-                if (item) {
-                    item.total = item.quantidade * item.preco;
-                }
-                
-                updateCart();
-            } catch (error) {
-                console.error('Erro ao atualizar item do carrinho:', error);
-            }
-        }
-        
-        function removeCartItem(index) {
-            try {
-                carrinho.splice(index, 1);
-                updateCart();
-                showNotification('Item removido do carrinho', 'info');
-            } catch (error) {
-                console.error('Erro ao remover item do carrinho:', error);
-            }
-        }
-        
-        function clearCart() {
-            try {
-                if (carrinho.length === 0) return;
-                
-                if (confirm('Tem certeza que deseja limpar o carrinho?')) {
-                    carrinho = [];
-                    updateCart();
-                    showNotification('Carrinho limpo!', 'info');
-                }
-            } catch (error) {
-                console.error('Erro ao limpar carrinho:', error);
-            }
-        }
-        
-        async function finalizeSale() {
-            try {
-                if (carrinho.length === 0) return;
-                
-                const formaPagamento = document.querySelector('input[name="payment"]:checked').value;
-                const total = carrinho.reduce((sum, item) => sum + item.total, 0);
-                
-                const novaVenda = {
-                    id: Date.now(),
-                    data: new Date().toISOString().split('T')[0],
-                    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                    itens: carrinho.map(item => ({
-                        produtoId: item.produtoId,
-                        nome: item.nome,
-                        quantidade: item.quantidade,
-                        preco: item.preco
-                    })),
-                    total: total,
-                    pagamento: formaPagamento
-                };
-                
-                // Salvar venda no Supabase
-                const saleSaved = await saveSaleToSupabase(novaVenda);
-                
-                if (saleSaved) {
-                    // Atualizar estoque no Supabase
-                    for (const itemCarrinho of carrinho) {
-                        const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
-                        if (produto) {
-                            const novoEstoque = produto.estoque - itemCarrinho.quantidade;
-                            const novasVendas = (produto.vendas || 0) + itemCarrinho.quantidade;
-                            
-                            await updateProductStockInSupabase(produto.id, novoEstoque, novasVendas);
-                            
-                            // Atualizar localmente
-                            produto.estoque = novoEstoque;
-                            produto.vendas = novasVendas;
-                        }
-                    }
-                    
-                    vendas.push(novaVenda);
-                    
-                    showNotification(`✅ Venda realizada! R$ ${total.toFixed(2)}`, 'success');
-                    
-                    carrinho = [];
-                    updateCart();
-                    
-                    loadDashboard();
-                    
-                    setTimeout(() => {
-                        navigateTo('dashboard');
-                    }, 1000);
-                } else {
-                    showNotification('Erro ao salvar venda no banco de dados!', 'error');
-                }
-            } catch (error) {
-                console.error('Erro ao finalizar venda:', error);
-                showNotification('Erro ao finalizar venda!', 'error');
-            }
-        }
-        
-        // ===== PRODUTOS =====
-        function loadProductsList() {
+        async function loadProductsList() {
             try {
                 const container = document.getElementById('productsList');
                 const filter = document.getElementById('productFilter').value;
                 const search = document.getElementById('productSearch').value.toLowerCase();
                 
-                let filteredProducts = [...produtos];
+                let filtro = {};
                 
-                if (filter === 'estoque-baixo') {
-                    filteredProducts = filteredProducts.filter(p => p.estoque < 10);
-                } else if (filter === 'mais-vendidos') {
-                    filteredProducts = filteredProducts.sort((a, b) => (b.vendas || 0) - (a.vendas || 0));
-                } else if (filter === 'ativos') {
-                    filteredProducts = filteredProducts.filter(p => p.ativo);
-                } else if (filter === 'inativos') {
-                    filteredProducts = filteredProducts.filter(p => !p.ativo);
+                switch(filter) {
+                    case 'estoque-baixo': 
+                        filtro.estoqueBaixo = true;
+                        break;
+                    case 'ativos': 
+                        filtro.ativos = true;
+                        break;
+                    case 'inativos': 
+                        filtro.ativos = false;
+                        break;
                 }
                 
                 if (search) {
-                    filteredProducts = filteredProducts.filter(p => 
-                        p.nome.toLowerCase().includes(search) || 
-                        p.descricao.toLowerCase().includes(search)
-                    );
+                    filtro.busca = search;
                 }
                 
-                if (filteredProducts.length === 0) {
+                let produtosFiltrados = await obterTodosProdutos(filtro);
+                
+                if (filter === 'mais-vendidos') {
+                    produtosFiltrados.sort((a, b) => (b.vendas || 0) - (a.vendas || 0));
+                }
+                
+                if (produtosFiltrados.length === 0) {
                     container.innerHTML = `
                         <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
                             <i class="fas fa-ice-cream" style="font-size: 50px; margin-bottom: 15px; opacity: 0.3;"></i>
@@ -1136,7 +564,7 @@
                 
                 container.innerHTML = '';
                 
-                filteredProducts.forEach(produto => {
+                produtosFiltrados.forEach(produto => {
                     const estoqueClasse = produto.estoque < 10 ? 'stock-low' : '';
                     const statusClass = produto.ativo ? 'success' : 'danger';
                     const statusText = produto.ativo ? 'Ativo' : 'Inativo';
@@ -1176,295 +604,92 @@
                 });
             } catch (error) {
                 console.error('Erro ao carregar lista de produtos:', error);
-            }
-        }
-        
-        // ===== MODAL DE PRODUTO =====
-        function openProductModal(produto = null) {
-            try {
-                const modal = document.getElementById('productModal');
-                const title = document.getElementById('modalTitle');
-                const preview = document.getElementById('photoPreview');
-                
-                if (produto) {
-                    title.textContent = `Editar: ${produto.nome}`;
-                    document.getElementById('productId').value = produto.id;
-                    document.getElementById('productName').value = produto.nome;
-                    document.getElementById('productDescription').value = produto.descricao;
-                    document.getElementById('productPrice').value = produto.preco;
-                    document.getElementById('productStock').value = produto.estoque;
-                    document.getElementById('selectedEmoji').textContent = produto.emoji;
-                    document.getElementById('productEmoji').value = produto.emoji;
-                    document.getElementById('productColor').value = produto.cor;
-                    document.getElementById('productActive').checked = produto.ativo;
-                    document.getElementById('productPhotoData').value = produto.foto || '';
-                    
-                    if (produto.foto) {
-                        preview.src = produto.foto;
-                        preview.classList.add('show');
-                    } else {
-                        preview.src = '';
-                        preview.classList.remove('show');
-                    }
-                } else {
-                    title.textContent = 'Novo Produto';
-                    document.getElementById('productForm').reset();
-                    document.getElementById('productId').value = '';
-                    document.getElementById('selectedEmoji').textContent = '🍦';
-                    document.getElementById('productEmoji').value = '🍦';
-                    document.getElementById('productColor').value = '#36B5B0';
-                    document.getElementById('productActive').checked = true;
-                    document.getElementById('productPhotoData').value = '';
-                    preview.src = '';
-                    preview.classList.remove('show');
-                    document.getElementById('productPhoto').value = '';
-                }
-                
-                modal.classList.add('active');
-            } catch (error) {
-                console.error('Erro ao abrir modal:', error);
-            }
-        }
-        
-        function closeProductModal() {
-            const modal = document.getElementById('productModal');
-            modal.classList.remove('active');
-            document.getElementById('emojiPicker').classList.remove('show');
-        }
-        
-        async function saveProduct() {
-            try {
-                const form = document.getElementById('productForm');
-                if (!form.checkValidity()) {
-                    form.reportValidity();
-                    return;
-                }
-                
-                const id = document.getElementById('productId').value;
-                const produtoData = {
-                    nome: document.getElementById('productName').value,
-                    descricao: document.getElementById('productDescription').value,
-                    preco: parseFloat(document.getElementById('productPrice').value),
-                    estoque: parseInt(document.getElementById('productStock').value),
-                    emoji: document.getElementById('productEmoji').value,
-                    cor: document.getElementById('productColor').value,
-                    ativo: document.getElementById('productActive').checked,
-                    vendas: 0,
-                    foto: document.getElementById('productPhotoData').value || null
-                };
-                
-                if (id) {
-                    // Atualizar produto existente
-                    produtoData.id = parseInt(id);
-                    const produtoExistente = produtos.find(p => p.id === parseInt(id));
-                    produtoData.vendas = produtoExistente ? produtoExistente.vendas || 0 : 0;
-                    
-                    const success = await saveProductToSupabase(produtoData);
-                    
-                    if (success) {
-                        const index = produtos.findIndex(p => p.id === parseInt(id));
-                        produtos[index] = produtoData;
-                        showNotification(`✅ Produto atualizado!`, 'success');
-                    } else {
-                        showNotification('Erro ao atualizar produto no banco de dados!', 'error');
-                        return;
-                    }
-                } else {
-                    // Criar novo produto
-                    const success = await saveProductToSupabase(produtoData);
-                    
-                    if (success) {
-                        // Buscar o ID gerado pelo Supabase
-                        const { data: novoProduto, error } = await supabase
-                            .from('produtos')
-                            .select('*')
-                            .eq('nome', produtoData.nome)
-                            .single();
-                        
-                        if (!error && novoProduto) {
-                            produtoData.id = novoProduto.id;
-                            produtos.push(produtoData);
-                            showNotification(`✅ Produto criado!`, 'success');
-                        } else {
-                            produtoData.id = Date.now();
-                            produtos.push(produtoData);
-                            showNotification(`✅ Produto criado!`, 'success');
-                        }
-                    } else {
-                        showNotification('Erro ao criar produto no banco de dados!', 'error');
-                        return;
-                    }
-                }
-                
-                closeProductModal();
-                loadProductsList();
-                loadProductsForSale();
-                loadDashboard();
-            } catch (error) {
-                console.error('Erro ao salvar produto:', error);
-                showNotification('Erro ao salvar produto!', 'error');
-            }
-        }
-        
-        // ===== RELATÓRIOS =====
-        function generateReport() {
-            try {
-                const periodo = document.getElementById('reportPeriod').value;
-                let dataInicio, dataFim;
-                
-                const hoje = new Date();
-                
-                switch(periodo) {
-                    case 'hoje':
-                        dataInicio = dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'ontem':
-                        const ontem = new Date(hoje);
-                        ontem.setDate(hoje.getDate() - 1);
-                        dataInicio = dataFim = ontem.toISOString().split('T')[0];
-                        break;
-                    case 'semana':
-                        const inicioSemana = new Date(hoje);
-                        inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-                        dataInicio = inicioSemana.toISOString().split('T')[0];
-                        dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'mes':
-                        dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0];
-                        dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'ano':
-                        dataInicio = new Date(hoje.getFullYear(), 0, 1).toISOString().split('T')[0];
-                        dataFim = hoje.toISOString().split('T')[0];
-                        break;
-                    case 'personalizado':
-                        dataInicio = document.getElementById('startDate').value;
-                        dataFim = document.getElementById('endDate').value;
-                        if (!dataInicio || !dataFim) {
-                            showNotification('Selecione o período!', 'error');
-                            return;
-                        }
-                        break;
-                }
-                
-                const vendasPeriodo = vendas.filter(v => v.data >= dataInicio && v.data <= dataFim);
-                const totalFaturamento = vendasPeriodo.reduce((sum, v) => sum + v.total, 0);
-                const totalItens = vendasPeriodo.reduce((sum, v) => 
-                    sum + v.itens.reduce((s, i) => s + i.quantidade, 0), 0);
-                
-                const topProdutosPeriodo = {};
-                vendasPeriodo.forEach(venda => {
-                    venda.itens.forEach(item => {
-                        if (!topProdutosPeriodo[item.nome]) {
-                            topProdutosPeriodo[item.nome] = 0;
-                        }
-                        topProdutosPeriodo[item.nome] += item.quantidade;
-                    });
-                });
-                
-                const topProdutosHTML = Object.entries(topProdutosPeriodo)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-                    .map(([nome, quantidade], index) => `
-                        <div style="display: flex; justify-content: space-between; padding: 8px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 8px; margin-bottom: 5px; font-size: 14px;">
-                            <span>${index + 1}. ${nome}</span>
-                            <span><strong>${quantidade} vendas</strong></span>
-                        </div>
-                    `).join('');
-                
-                let html = `
-                    <div style="text-align: center; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, var(--primary), #2A9D8F); color: white; border-radius: 15px;">
-                        <h2 style="font-size: 20px; margin-bottom: 8px;">🍦 Relatório de Vendas</h2>
-                        <p style="font-size: 14px; opacity: 0.9;">Período: ${periodo === 'personalizado' ? `${formatarData(dataInicio)} à ${formatarData(dataFim)}` : periodo}</p>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                        <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: var(--shadow); border-top: 3px solid var(--primary);">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Faturamento</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--dark);">R$ ${totalFaturamento.toFixed(2)}</div>
-                        </div>
-                        
-                        <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: var(--shadow); border-top: 3px solid var(--secondary);">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Itens Vendidos</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--dark);">${totalItens}</div>
-                        </div>
-                        
-                        <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: var(--shadow); border-top: 3px solid var(--accent);">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Total de Vendas</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--dark);">${vendasPeriodo.length}</div>
-                        </div>
-                        
-                        <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: var(--shadow); border-top: 3px solid var(--success);">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Média por Venda</div>
-                            <div style="font-size: 24px; font-weight: 900; color: var(--dark);">R$ ${vendasPeriodo.length > 0 ? (totalFaturamento / vendasPeriodo.length).toFixed(2) : '0.00'}</div>
-                        </div>
+                container.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray);">
+                        <i class="fas fa-exclamation-circle" style="font-size: 50px; margin-bottom: 15px; color: var(--danger);"></i>
+                        <p style="font-size: 16px;">Erro ao carregar produtos</p>
                     </div>
                 `;
-                
-                if (topProdutosHTML) {
-                    html += `
-                        <div style="background: white; padding: 15px; border-radius: 15px; box-shadow: var(--shadow);">
-                            <h3 style="color: var(--dark); margin-bottom: 15px; font-size: 16px;">
-                                <i class="fas fa-crown"></i> Produtos Mais Vendidos
-                            </h3>
-                            ${topProdutosHTML}
-                        </div>
-                    `;
-                }
-                
-                document.getElementById('reportContent').innerHTML = html;
-                showNotification('✅ Relatório gerado!', 'success');
-            } catch (error) {
-                console.error('Erro ao gerar relatório:', error);
-                showNotification('Erro ao gerar relatório!', 'error');
             }
         }
         
-        function printReport() {
+        async function finalizeSale() {
             try {
-                window.print();
-                showNotification('Imprimindo relatório...', 'info');
-            } catch (error) {
-                console.error('Erro ao imprimir:', error);
-                showNotification('Erro ao imprimir!', 'error');
-            }
-        }
-        
-        // ===== CONFIGURAÇÕES =====
-        function loadConfigInfo() {
-            try {
-                document.getElementById('totalProducts').textContent = produtos.length;
-                document.getElementById('totalSales').textContent = vendas.length;
+                if (carrinho.length === 0) return;
                 
-                const totalRevenue = vendas.reduce((sum, v) => sum + v.total, 0);
-                document.getElementById('totalRevenue').textContent = `R$ ${totalRevenue.toFixed(2)}`;
-            } catch (error) {
-                console.error('Erro ao carregar informações:', error);
-            }
-        }
-        
-        function backupData() {
-            try {
-                const backup = {
-                    produtos: produtos,
-                    vendas: vendas,
-                    backup_date: new Date().toISOString()
+                const formaPagamento = document.querySelector('input[name="payment"]:checked').value;
+                const total = carrinho.reduce((sum, item) => sum + item.total, 0);
+                
+                const novaVenda = {
+                    data: new Date().toISOString().split('T')[0],
+                    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    itens: carrinho.map(item => ({
+                        produtoId: item.produtoId,
+                        nome: item.nome,
+                        quantidade: item.quantidade,
+                        preco: item.preco
+                    })),
+                    total: total,
+                    pagamento: formaPagamento
                 };
                 
-                const dataStr = JSON.stringify(backup, null, 2);
-                const blob = new Blob([dataStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
+                await salvarVenda(novaVenda);
                 
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `backup_chop_${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
+                showNotification(`✅ Venda realizada! R$ ${total.toFixed(2)}`, 'success');
                 
-                showNotification('✅ Backup realizado com sucesso!', 'success');
+                carrinho = [];
+                updateCart();
+                
+                // Atualizar dashboard
+                await loadDashboard();
+                await loadProductsForSale();
+                
+                // Voltar para dashboard após 1 segundo
+                setTimeout(() => {
+                    navigateTo('dashboard');
+                }, 1000);
             } catch (error) {
-                console.error('Erro ao fazer backup:', error);
-                showNotification('Erro ao fazer backup!', 'error');
+                console.error('Erro ao finalizar venda:', error);
+                showNotification('Erro ao finalizar venda!', 'error');
             }
+        }
+        
+        // ===== FUNÇÕES DE GESTÃO DE ARQUIVOS (FOTOS) =====
+        async function uploadFoto(file) {
+            try {
+                // Criar nome único para o arquivo
+                const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+                
+                // Fazer upload para o Supabase Storage
+                const { data, error } = await supabase.storage
+                    .from('produtos') // Bucket precisa existir
+                    .upload(fileName, file);
+                
+                if (error) {
+                    // Se o bucket não existir, usar base64
+                    console.warn('Bucket não encontrado, usando base64:', error);
+                    return await fileToBase64(file);
+                }
+                
+                // Obter URL pública
+                const { data: urlData } = supabase.storage
+                    .from('produtos')
+                    .getPublicUrl(fileName);
+                
+                return urlData.publicUrl;
+            } catch (error) {
+                console.error('Erro no upload de foto:', error);
+                return await fileToBase64(file); // Fallback para base64
+            }
+        }
+        
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
         }
         
         // ===== FUNÇÕES UTILITÁRIAS =====
@@ -1495,21 +720,12 @@
             }
         }
         
-        function formatarData(dataStr) {
-            try {
-                const [year, month, day] = dataStr.split('-');
-                return `${day}/${month}/${year}`;
-            } catch (error) {
-                return dataStr;
-            }
-        }
-        
         // ===== FUNÇÕES GLOBAIS =====
         window.navigateTo = navigateTo;
         
-        window.editProduct = function(id) {
+        window.editProduct = async function(id) {
             try {
-                const produto = produtos.find(p => p.id === id);
+                const produto = await obterProduto(id);
                 if (produto) openProductModal(produto);
             } catch (error) {
                 console.error('Erro ao editar produto:', error);
@@ -1518,25 +734,120 @@
         
         window.deleteProduct = async function(id) {
             try {
-                const produto = produtos.find(p => p.id === id);
+                const produto = await obterProduto(id);
                 if (produto && confirm(`Tem certeza que deseja excluir "${produto.nome}"?`)) {
-                    const success = await deleteProductFromSupabase(id);
-                    
-                    if (success) {
-                        produtos = produtos.filter(p => p.id !== id);
-                        showNotification('✅ Produto excluído!', 'success');
-                        loadProductsList();
-                        loadProductsForSale();
-                        loadDashboard();
-                    } else {
-                        showNotification('Erro ao excluir produto do banco de dados!', 'error');
-                    }
+                    await excluirProduto(id);
+                    showNotification('✅ Produto excluído!', 'success');
+                    await loadProductsList();
+                    await loadProductsForSale();
+                    await loadDashboard();
                 }
             } catch (error) {
                 console.error('Erro ao excluir produto:', error);
                 showNotification('Erro ao excluir produto!', 'error');
             }
         };
+        
+        // ... (mantenha as outras funções do seu código original, como initNavigation, initComponents, etc.)
+        
+        // Adicione esta função para atualizar gráficos
+        function updateCharts(vendasHoje, produtos) {
+            try {
+                // Gráfico de pizza - Produtos mais vendidos hoje
+                const vendasPorProduto = {};
+                vendasHoje.forEach(venda => {
+                    venda.itens.forEach(item => {
+                        if (!vendasPorProduto[item.nome]) {
+                            vendasPorProduto[item.nome] = 0;
+                        }
+                        vendasPorProduto[item.nome] += item.quantidade;
+                    });
+                });
+                
+                const ctx1 = document.getElementById('flavorsChart');
+                if (ctx1) {
+                    if (charts.flavors) charts.flavors.destroy();
+                    
+                    if (Object.keys(vendasPorProduto).length > 0) {
+                        charts.flavors = new Chart(ctx1.getContext('2d'), {
+                            type: 'pie',
+                            data: {
+                                labels: Object.keys(vendasPorProduto),
+                                datasets: [{
+                                    data: Object.values(vendasPorProduto),
+                                    backgroundColor: Object.keys(vendasPorProduto).map(nome => {
+                                        const produto = produtos.find(p => p.nome === nome);
+                                        return produto ? produto.cor : '#CCCCCC';
+                                    }),
+                                    borderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    legend: { position: 'bottom' }
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                // Gráfico de linha - Evolução semanal
+                const ultimos7Dias = [];
+                const vendasPorDia = [];
+                
+                for (let i = 6; i >= 0; i--) {
+                    const data = new Date();
+                    data.setDate(data.getDate() - i);
+                    const dataStr = data.toISOString().split('T')[0];
+                    ultimos7Dias.push(formatarData(dataStr));
+                    
+                    // Filtra vendas por dia
+                    const vendasDia = vendasHoje.filter(v => v.data === dataStr);
+                    const totalDia = vendasDia.reduce((sum, v) => sum + v.total, 0);
+                    vendasPorDia.push(totalDia);
+                }
+                
+                const ctx2 = document.getElementById('weeklyChart');
+                if (ctx2) {
+                    if (charts.weekly) charts.weekly.destroy();
+                    
+                    charts.weekly = new Chart(ctx2.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: ultimos7Dias,
+                            datasets: [{
+                                label: 'Faturamento (R$)',
+                                data: vendasPorDia,
+                                borderColor: '#36B5B0',
+                                backgroundColor: 'rgba(54, 181, 176, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: true }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar gráficos:', error);
+            }
+        }
+        
+        function formatarData(dataStr) {
+            try {
+                const [year, month, day] = dataStr.split('-');
+                return `${day}/${month}`;
+            } catch (error) {
+                return dataStr;
+            }
+        }
+
     </script>
 </body>
 </html>
