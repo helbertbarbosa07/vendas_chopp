@@ -2289,7 +2289,6 @@ updateStatistics();
     if (totalRevenueEl) {
         totalRevenueEl.textContent = `R$ ${totalRevenue.toFixed(2)}`;
     }
-}
     function updateCharts() {
         const produtosMaisVendidos = [...produtos]
             .filter(p => (p.vendas || 0) > 0)
