@@ -110,10 +110,11 @@
             background: #f8f9fa;
             border-bottom: 3px solid var(--primary);
             padding: 0 20px;
+            overflow-x: auto;
         }
         
         .nav-tab {
-            padding: 20px 35px;
+            padding: 20px 25px;
             background: none;
             border: none;
             font-size: 16px;
@@ -125,6 +126,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            white-space: nowrap;
         }
         
         .nav-tab:hover {
@@ -862,6 +864,9 @@
             <button class="nav-tab" data-page="produtos">
                 <i class="fas fa-ice-cream"></i> Produtos
             </button>
+            <button class="nav-tab" data-page="fiados">
+                <i class="fas fa-hand-holding-usd"></i> Fiados
+            </button>
             <button class="nav-tab" data-page="relatorios">
                 <i class="fas fa-chart-pie"></i> Relatórios
             </button>
@@ -1058,6 +1063,14 @@
                                     <div class="payment-name">PIX</div>
                                 </div>
                             </label>
+                            
+                            <label class="payment-option">
+                                <input type="radio" name="payment" value="fiado">
+                                <div class="payment-card">
+                                    <span class="payment-icon">📝</span>
+                                    <div class="payment-name">Fiado</div>
+                                </div>
+                            </label>
                         </div>
                     </div>
                     
@@ -1109,6 +1122,91 @@
                     <div class="loading" style="grid-column: 1 / -1;">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando produtos...</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- FIADOS -->
+            <section id="fiados" class="page">
+                <div class="page-title">
+                    <i class="fas fa-hand-holding-usd"></i>
+                    <h2>Controle de Fiados</h2>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <p style="color: var(--gray); font-size: 16px;">
+                        Gerencie vendas fiadas e recebimentos
+                    </p>
+                    <button class="btn-primary" id="novoFiado" style="padding: 12px 25px; font-size: 16px;">
+                        <i class="fas fa-plus"></i>
+                        Novo Fiado
+                    </button>
+                </div>
+                
+                <!-- RESUMO DE FIADOS -->
+                <div class="stats-grid" style="margin-bottom: 30px;">
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Total a Receber</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--dark);" id="totalReceber">R$ 0,00</div>
+                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Recebido Mês</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--success);" id="recebidoMes">R$ 0,00</div>
+                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
+                            <i class="fas fa-cash-register"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Clientes em Atraso</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--danger);" id="clientesAtraso">0</div>
+                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Fiados Ativos</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--warning);" id="fiadosAtivos">0</div>
+                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- FILTROS -->
+                <div style="background: white; padding: 15px; border-radius: 15px; box-shadow: var(--shadow); margin-bottom: 20px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 700; color: var(--dark); font-size: 14px;">Status:</label>
+                            <select id="filterStatus" style="padding: 10px 15px; border: 2px solid #dee2e6; border-radius: 10px; font-size: 14px; min-width: 150px;">
+                                <option value="todos">Todos</option>
+                                <option value="pendente">Pendentes</option>
+                                <option value="atrasado">Em Atraso</option>
+                                <option value="pago">Pagos</option>
+                                <option value="parcial">Parcialmente Pagos</option>
+                            </select>
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 200px;">
+                            <input type="text" id="searchCliente" placeholder="Buscar cliente..." style="width: 100%; padding: 10px 15px; border: 2px solid #dee2e6; border-radius: 10px; font-size: 14px;">
+                        </div>
+                        
+                        <button class="btn-primary" id="btnExportFiados" style="padding: 10px 20px; font-size: 14px;">
+                            <i class="fas fa-file-export"></i> Exportar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- LISTA DE FIADOS -->
+                <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow);">
+                    <div id="fiadosList" class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando fiados...</p>
                     </div>
                 </div>
             </section>
@@ -1313,25 +1411,173 @@
         </div>
     </div>
     
+    <!-- MODAL FIADO -->
+    <div class="modal-overlay" id="fiadoModal">
+        <div class="modal" style="max-width: 600px;">
+            <div style="padding: 20px; background: linear-gradient(135deg, #FF7BAC, #FF4081); color: white; border-radius: 15px 15px 0 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-hand-holding-usd"></i>
+                        <span id="modalFiadoTitle">Novo Fiado</span>
+                    </div>
+                    <button id="closeFiadoModal" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            
+            <div style="padding: 20px;">
+                <form id="fiadoForm">
+                    <input type="hidden" id="fiadoIndex">
+                    
+                    <div class="form-group">
+                        <label class="form-label">Nome do Cliente *</label>
+                        <input type="text" id="nomeCliente" class="form-input" placeholder="Nome completo" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Telefone</label>
+                        <input type="text" id="telefoneCliente" class="form-input" placeholder="(11) 99999-9999">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Produtos *</label>
+                        <div id="produtosFiadoContainer">
+                            <!-- Produtos serão adicionados dinamicamente -->
+                        </div>
+                        <button type="button" class="btn-primary" id="addProdutoFiado" style="margin-top: 10px; padding: 8px 15px; font-size: 14px;">
+                            <i class="fas fa-plus"></i> Adicionar Produto
+                        </button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Prazo de Pagamento *</label>
+                        <input type="date" id="prazoPagamento" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Data de Retirada</label>
+                        <input type="date" id="dataRetirada" class="form-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Valor Pago Inicial (se houver)</label>
+                        <input type="number" id="valorPago" class="form-input" step="0.01" min="0" value="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Observações</label>
+                        <textarea id="observacoes" class="form-input" rows="3" placeholder="Observações importantes..."></textarea>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: 700;">
+                            <span>Total:</span>
+                            <span id="fiadoTotal">R$ 0,00</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div style="padding: 15px 20px; border-top: 2px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn-primary" id="cancelFiadoModal" style="background: var(--gray); padding: 10px 20px;">
+                    Cancelar
+                </button>
+                <button class="btn-primary" id="saveFiado" style="padding: 10px 20px;">
+                    Salvar Fiado
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL PAGAMENTO FIADO -->
+    <div class="modal-overlay" id="pagamentoModal">
+        <div class="modal" style="max-width: 500px;">
+            <div style="padding: 20px; background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white; border-radius: 15px 15px 0 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>Registrar Pagamento</span>
+                    </div>
+                    <button onclick="fecharPagamentoModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            
+            <div style="padding: 20px;">
+                <div id="pagamentoInfo" style="margin-bottom: 20px;"></div>
+                
+                <div class="form-group">
+                    <label class="form-label">Valor do Pagamento *</label>
+                    <input type="number" id="valorPagamento" class="form-input" step="0.01" min="0" placeholder="0.00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Data do Pagamento</label>
+                    <input type="date" id="dataPagamento" class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Forma de Pagamento</label>
+                    <select id="formaPagamento" class="form-input">
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="pix">PIX</option>
+                        <option value="cartao">Cartão</option>
+                        <option value="transferencia">Transferência</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Observações</label>
+                    <textarea id="obsPagamento" class="form-input" rows="2" placeholder="Observações sobre o pagamento..."></textarea>
+                </div>
+            </div>
+            
+            <div style="padding: 15px 20px; border-top: 2px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn-primary" onclick="fecharPagamentoModal()" style="background: var(--gray); padding: 10px 20px;">
+                    Cancelar
+                </button>
+                <button class="btn-primary" onclick="confirmarPagamento()" style="padding: 10px 20px;">
+                    Registrar Pagamento
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
 
-   <script>
-  // ===== CONFIGURAÇÃO =====
+<script>
+// ===== CONFIGURAÇÃO =====
 const API_URL = window.location.origin + '/api/neon';
 
 // ===== DADOS DO SISTEMA =====
 let produtos = JSON.parse(localStorage.getItem('chop_produtos')) || [];
 let vendas = JSON.parse(localStorage.getItem('chop_vendas')) || [];
+let fiados = JSON.parse(localStorage.getItem('chop_fiados')) || [];
 let carrinho = [];
 let charts = {};
 let dbOnline = false;
+let fiadoEditando = null;
 
 // ===== FUNÇÕES AUXILIARES =====
 function formatPrice(value) {
     if (value === undefined || value === null || value === '') return '0.00';
     const num = Number(value);
     return isNaN(num) ? '0.00' : num.toFixed(2);
+}
+
+function formatarData(dataString) {
+    const data = new Date(dataString);
+    const dia = String(data.getDate()).padStart(2, '0');
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const ano = data.getFullYear();
+    return `${dia}/${mes}/${ano}`;
+}
+
+function formatarDataRelatorio(dataString) {
+    return formatarData(dataString);
 }
 
 // ===== LISTA DE EMOJIS =====
@@ -1469,12 +1715,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupNavigation();
     setupEventListeners();
     initComponents();
+    initFiadosSystem();
     
     await tryConnectNeon();
     
     loadDashboard();
     loadProductsForSale();
     loadProductsList();
+    carregarFiados();
+    calcularResumoFiados();
     
     showNotification('Sistema carregado!', 'success');
 });
@@ -1501,6 +1750,7 @@ function setupNavigation() {
                     case 'dashboard': loadDashboard(); break;
                     case 'vendas': loadProductsForSale(); break;
                     case 'produtos': loadProductsList(); break;
+                    case 'fiados': carregarFiados(); break;
                     case 'relatorios': loadReports(); break;
                     case 'config': loadConfig(); break;
                 }
@@ -1524,12 +1774,22 @@ function setupEventListeners() {
     document.getElementById('btnVerTodosProdutos')?.addEventListener('click', () => navigateTo('produtos'));
     document.getElementById('btnReporEstoque')?.addEventListener('click', () => navigateTo('produtos'));
     
-    // Modal
+    // Modal Produto
     document.getElementById('closeModal')?.addEventListener('click', closeProductModal);
     document.getElementById('cancelModal')?.addEventListener('click', closeProductModal);
     document.getElementById('saveProduct')?.addEventListener('click', saveProduct);
     
-    // Filtros
+    // Fiados
+    document.getElementById('novoFiado')?.addEventListener('click', () => abrirModalFiado());
+    document.getElementById('filterStatus')?.addEventListener('change', carregarFiados);
+    document.getElementById('searchCliente')?.addEventListener('input', carregarFiados);
+    document.getElementById('btnExportFiados')?.addEventListener('click', exportarFiados);
+    document.getElementById('closeFiadoModal')?.addEventListener('click', fecharModalFiado);
+    document.getElementById('cancelFiadoModal')?.addEventListener('click', fecharModalFiado);
+    document.getElementById('saveFiado')?.addEventListener('click', salvarFiado);
+    document.getElementById('addProdutoFiado')?.addEventListener('click', adicionarProdutoFiado);
+    
+    // Filtros Relatórios
     document.getElementById('reportPeriod')?.addEventListener('change', function() {
         const isCustom = this.value === 'personalizado';
         document.getElementById('customDateRange').style.display = isCustom ? 'block' : 'none';
@@ -1539,23 +1799,42 @@ function setupEventListeners() {
     document.getElementById('printReport')?.addEventListener('click', printReport);
     document.getElementById('backupBtn')?.addEventListener('click', backupData);
     
-    // Upload de foto
-    document.getElementById('photoUploadContainer')?.addEventListener('click', () => {
-        document.getElementById('productPhoto').click();
-    });
+    // Upload de foto - FIX CORRIGIDO
+    const photoContainer = document.getElementById('photoUploadContainer');
+    const photoInput = document.getElementById('productPhoto');
     
-    document.getElementById('productPhoto')?.addEventListener('change', function(e) {
-        if (this.files && this.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const preview = document.getElementById('photoPreview');
-                preview.src = e.target.result;
-                preview.classList.add('show');
-                document.getElementById('productPhotoData').value = e.target.result;
-            };
-            reader.readAsDataURL(this.files[0]);
-        }
-    });
+    if (photoContainer && photoInput) {
+        photoContainer.addEventListener('click', function() {
+            photoInput.click();
+        });
+        
+        photoInput.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                
+                // Verificar tamanho (max 2MB)
+                if (file.size > 2 * 1024 * 1024) {
+                    showNotification('Imagem muito grande! Máximo 2MB.', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // Salvar como base64
+                    const base64String = e.target.result;
+                    
+                    // Atualizar preview
+                    const preview = document.getElementById('photoPreview');
+                    preview.src = base64String;
+                    preview.classList.add('show');
+                    
+                    // Salvar no campo hidden
+                    document.getElementById('productPhotoData').value = base64String;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
 }
 
 function initComponents() {
@@ -1603,6 +1882,17 @@ function initComponents() {
     });
 }
 
+function initFiadosSystem() {
+    // Data padrão para prazo (7 dias a partir de hoje)
+    const prazoPadrao = new Date();
+    prazoPadrao.setDate(prazoPadrao.getDate() + 7);
+    document.getElementById('prazoPagamento').value = prazoPadrao.toISOString().split('T')[0];
+    
+    // Data padrão para retirada (hoje)
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('dataRetirada').value = hoje;
+}
+
 async function tryConnectNeon() {
     try {
         console.log('🔄 Tentando conectar ao Neon DB...');
@@ -1632,6 +1922,7 @@ async function tryConnectNeon() {
         // Usar dados do localStorage como fallback
         produtos = JSON.parse(localStorage.getItem('chop_produtos')) || [];
         vendas = JSON.parse(localStorage.getItem('chop_vendas')) || [];
+        fiados = JSON.parse(localStorage.getItem('chop_fiados')) || [];
         
         // Atualizar status do botão
         updateSyncButtonStatus();
@@ -1690,7 +1981,8 @@ async function loadFromNeon() {
                 emoji: p.emoji || '🍦',
                 cor: p.cor || '#36B5B0',
                 ativo: p.ativo !== false,
-                vendas: parseInt(p.vendas || 0)
+                vendas: parseInt(p.vendas || 0),
+                foto: p.foto || null
             }));
             console.log(`✅ ${produtos.length} produtos carregados do Neon`);
         }
@@ -1755,6 +2047,8 @@ async function loadFromNeon() {
         loadDashboard();
         loadProductsForSale();
         loadProductsList();
+        carregarFiados();
+        calcularResumoFiados();
         updateCharts();
         updateStatistics();
         
@@ -1826,7 +2120,8 @@ function loadRecentSales() {
         const pagamentoClass = {
             'dinheiro': 'payment-dinheiro',
             'cartao': 'payment-cartao',
-            'pix': 'payment-pix'
+            'pix': 'payment-pix',
+            'fiado': 'payment-pix'
         }[venda.pagamento] || '';
         
         html += `
@@ -1941,11 +2236,14 @@ function loadProductsForSale() {
     let html = '';
     produtosAtivos.forEach(produto => {
         const estoqueStatus = produto.estoque < 5 ? 'style="color: var(--danger);"' : '';
+        const fotoHTML = produto.foto ? 
+            `<img src="${produto.foto}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px; margin-bottom: 10px;">` :
+            `<div style="font-size: 50px; margin-bottom: 15px;">${produto.emoji || '🍦'}</div>`;
         
         html += `
             <div class="flavor-card" onclick="addToCart(${produto.id})" 
                  style="border-color: ${produto.cor || '#36B5B0'};">
-                <div style="font-size: 50px; margin-bottom: 15px;">${produto.emoji || '🍦'}</div>
+                ${fotoHTML}
                 <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 10px; color: var(--dark);">
                     ${produto.nome}
                 </h3>
@@ -2064,6 +2362,12 @@ async function finalizeSale() {
         
         const formaPagamento = document.querySelector('input[name="payment"]:checked').value;
         const total = carrinho.reduce((sum, item) => sum + item.total, 0);
+        
+        // Se for fiado, abrir modal de fiado
+        if (formaPagamento === 'fiado') {
+            abrirModalFiadoParaVenda();
+            return;
+        }
         
         // Criar objeto da venda
         const novaVenda = {
@@ -2216,12 +2520,15 @@ function loadProductsList() {
         const activeStatus = produto.ativo !== false ? 'Ativo' : 'Inativo';
         const activeClass = produto.ativo !== false ? 'background: #e8f5e9; color: #2e7d32;' : 'background: #ffebee; color: #c62828;';
         const vendasCount = produto.vendas || 0;
+        const fotoHTML = produto.foto ? 
+            `<img src="${produto.foto}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 10px; margin-bottom: 10px;">` :
+            `<div style="font-size: 40px; margin-bottom: 10px;">${produto.emoji || '🍦'}</div>`;
         
         html += `
             <div class="flavor-card" onclick="editProduct(${produto.id})" 
                  style="border-color: ${produto.cor || '#36B5B0'}; cursor: pointer;">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                    <div style="font-size: 40px;">${produto.emoji || '🍦'}</div>
+                    ${fotoHTML}
                     <span style="padding: 4px 10px; border-radius: 15px; font-size: 12px; ${activeClass}">
                         ${activeStatus}
                     </span>
@@ -2272,6 +2579,7 @@ function openProductModal(produto = null) {
     const modal = document.getElementById('productModal');
     const title = document.getElementById('modalTitle');
     const form = document.getElementById('productForm');
+    const preview = document.getElementById('photoPreview');
     
     if (produto) {
         title.textContent = 'Editar Produto';
@@ -2284,6 +2592,16 @@ function openProductModal(produto = null) {
         document.getElementById('selectedEmoji').textContent = produto.emoji || '🍦';
         document.getElementById('productColor').value = produto.cor || '#36B5B0';
         document.getElementById('productActive').checked = produto.ativo !== false;
+        
+        if (produto.foto) {
+            preview.src = produto.foto;
+            preview.classList.add('show');
+            document.getElementById('productPhotoData').value = produto.foto;
+        } else {
+            preview.src = '';
+            preview.classList.remove('show');
+            document.getElementById('productPhotoData').value = '';
+        }
     } else {
         title.textContent = 'Novo Produto';
         form.reset();
@@ -2292,6 +2610,9 @@ function openProductModal(produto = null) {
         document.getElementById('productEmoji').value = '🍦';
         document.getElementById('productColor').value = '#36B5B0';
         document.getElementById('productActive').checked = true;
+        preview.src = '';
+        preview.classList.remove('show');
+        document.getElementById('productPhotoData').value = '';
     }
     
     modal.classList.add('active');
@@ -2320,7 +2641,8 @@ async function saveProduct() {
             emoji: document.getElementById('productEmoji').value,
             cor: document.getElementById('productColor').value,
             ativo: document.getElementById('productActive').checked,
-            vendas: 0
+            vendas: 0,
+            foto: document.getElementById('productPhotoData').value || null
         };
         
         let savedInNeon = false;
@@ -2331,6 +2653,7 @@ async function saveProduct() {
             if (produtoExistente) {
                 produtoData.id = parseInt(id);
                 produtoData.vendas = produtoExistente.vendas || 0;
+                produtoData.estoque = produtoExistente.estoque; // Manter estoque atual
             }
         } else {
             produtoData.id = Date.now();
@@ -2353,7 +2676,7 @@ async function saveProduct() {
         if (isEditing) {
             const index = produtos.findIndex(p => p.id === produtoData.id);
             if (index !== -1) {
-                produtos[index] = produtoData;
+                produtos[index] = { ...produtos[index], ...produtoData };
             }
         } else {
             produtos.push(produtoData);
@@ -2387,20 +2710,20 @@ async function saveProductToNeon(product) {
             await neonQuery(`
                 UPDATE produtos 
                 SET nome = $1, descricao = $2, preco = $3, estoque = $4, 
-                    emoji = $5, cor = $6, ativo = $7
-                WHERE id = $8
+                    emoji = $5, cor = $6, ativo = $7, foto = $8
+                WHERE id = $9
             `, [
                 product.nome, product.descricao, product.preco, product.estoque,
-                product.emoji, product.cor, product.ativo, product.id
+                product.emoji, product.cor, product.ativo, product.foto, product.id
             ]);
         } else {
             const result = await neonQuery(`
-                INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+                INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas, foto)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8)
                 RETURNING id
             `, [
                 product.nome, product.descricao, product.preco, product.estoque,
-                product.emoji, product.cor, product.ativo
+                product.emoji, product.cor, product.ativo, product.foto
             ]);
             product.id = result.rows[0].id;
         }
@@ -2551,6 +2874,521 @@ function updateCharts() {
     }
 }
 
+// ===== FIADOS =====
+function carregarFiados() {
+    const lista = document.getElementById('fiadosList');
+    const filtroStatus = document.getElementById('filterStatus')?.value || 'todos';
+    const busca = document.getElementById('searchCliente')?.value.toLowerCase() || '';
+    
+    let fiadosFiltrados = [...fiados];
+    
+    // Aplicar filtros
+    if (filtroStatus === 'pendente') {
+        fiadosFiltrados = fiadosFiltrados.filter(f => f.status === 'pendente' && !estaAtrasado(f));
+    } else if (filtroStatus === 'atrasado') {
+        fiadosFiltrados = fiadosFiltrados.filter(f => estaAtrasado(f));
+    } else if (filtroStatus === 'pago') {
+        fiadosFiltrados = fiadosFiltrados.filter(f => f.status === 'pago');
+    } else if (filtroStatus === 'parcial') {
+        fiadosFiltrados = fiadosFiltrados.filter(f => f.status === 'parcial');
+    }
+    
+    if (busca) {
+        fiadosFiltrados = fiadosFiltrados.filter(f => 
+            f.nomeCliente.toLowerCase().includes(busca) ||
+            (f.telefone && f.telefone.includes(busca))
+        );
+    }
+    
+    if (fiadosFiltrados.length === 0) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--gray);">
+                <i class="fas fa-hand-holding-usd" style="font-size: 50px; opacity: 0.3;"></i>
+                <p style="margin-top: 10px;">Nenhum fiado encontrado</p>
+                <button class="btn-primary" onclick="abrirModalFiado()" style="margin-top: 15px;">
+                    <i class="fas fa-plus"></i> Adicionar Fiado
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f8f9fa;">
+                    <th style="padding: 12px; text-align: left;">Cliente</th>
+                    <th style="padding: 12px; text-align: left;">Produtos</th>
+                    <th style="padding: 12px; text-align: left;">Prazo</th>
+                    <th style="padding: 12px; text-align: left;">Total</th>
+                    <th style="padding: 12px; text-align: left;">Status</th>
+                    <th style="padding: 12px; text-align: center;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    fiadosFiltrados.forEach((fiado, index) => {
+        const atrasado = estaAtrasado(fiado);
+        const statusClass = getStatusClass(fiado);
+        const produtosTexto = fiado.itens.map(i => `${i.quantidade}x ${i.nome}`).join(', ');
+        const totalPendente = fiado.total - fiado.valorPago;
+        
+        html += `
+            <tr style="border-bottom: 1px solid #eee; ${atrasado ? 'background: #fff8e1;' : ''}">
+                <td style="padding: 12px;">
+                    <div style="font-weight: 700;">${fiado.nomeCliente}</div>
+                    <div style="font-size: 12px; color: var(--gray);">${fiado.telefone || 'Sem telefone'}</div>
+                </td>
+                <td style="padding: 12px; font-size: 14px;">
+                    ${produtosTexto.substring(0, 50)}${produtosTexto.length > 50 ? '...' : ''}
+                </td>
+                <td style="padding: 12px;">
+                    ${formatarData(fiado.prazoPagamento)}
+                    ${atrasado ? '<br><small style="color: var(--danger);">ATRASADO</small>' : ''}
+                </td>
+                <td style="padding: 12px; font-weight: 800;">
+                    R$ ${formatPrice(fiado.total)}
+                    ${fiado.valorPago > 0 ? `<br><small style="color: var(--success);">Pago: R$ ${formatPrice(fiado.valorPago)}</small>` : ''}
+                    ${totalPendente > 0 ? `<br><small style="color: var(--warning);">Pendente: R$ ${formatPrice(totalPendente)}</small>` : ''}
+                </td>
+                <td style="padding: 12px;">
+                    <span style="padding: 4px 10px; border-radius: 15px; font-size: 12px; ${statusClass.style}">
+                        ${statusClass.text}
+                    </span>
+                </td>
+                <td style="padding: 12px; text-align: center;">
+                    <div style="display: flex; gap: 5px; justify-content: center;">
+                        ${fiado.status !== 'pago' ? `
+                            <button onclick="abrirPagamentoModal(${index})" style="padding: 6px 12px; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-money-bill"></i>
+                            </button>
+                        ` : ''}
+                        <button onclick="editarFiado(${index})" style="padding: 6px 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="excluirFiado(${index})" style="padding: 6px 12px; background: var(--danger); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    lista.innerHTML = html;
+}
+
+function calcularResumoFiados() {
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+    
+    let totalReceber = 0;
+    let recebidoMes = 0;
+    let clientesAtraso = 0;
+    let fiadosAtivos = 0;
+    
+    fiados.forEach(fiado => {
+        if (fiado.status !== 'pago') {
+            totalReceber += fiado.total - fiado.valorPago;
+            fiadosAtivos++;
+            
+            if (estaAtrasado(fiado)) {
+                clientesAtraso++;
+            }
+        }
+        
+        // Verificar pagamentos deste mês
+        if (fiado.pagamentos && fiado.pagamentos.length > 0) {
+            fiado.pagamentos.forEach(pagamento => {
+                const dataPagamento = new Date(pagamento.data);
+                if (dataPagamento.getMonth() === mesAtual && dataPagamento.getFullYear() === anoAtual) {
+                    recebidoMes += pagamento.valor;
+                }
+            });
+        }
+    });
+    
+    document.getElementById('totalReceber').textContent = `R$ ${formatPrice(totalReceber)}`;
+    document.getElementById('recebidoMes').textContent = `R$ ${formatPrice(recebidoMes)}`;
+    document.getElementById('clientesAtraso').textContent = clientesAtraso;
+    document.getElementById('fiadosAtivos').textContent = fiadosAtivos;
+}
+
+function estaAtrasado(fiado) {
+    if (fiado.status === 'pago') return false;
+    
+    const hoje = new Date();
+    const prazo = new Date(fiado.prazoPagamento);
+    return prazo < hoje;
+}
+
+function getStatusClass(fiado) {
+    if (fiado.status === 'pago') {
+        return { text: 'PAGO', style: 'background: #e8f5e9; color: #2e7d32;' };
+    } else if (estaAtrasado(fiado)) {
+        return { text: 'ATRASADO', style: 'background: #ffebee; color: #c62828;' };
+    } else if (fiado.valorPago > 0 && fiado.valorPago < fiado.total) {
+        return { text: 'PARCIAL', style: 'background: #fff3e0; color: #ef6c00;' };
+    } else {
+        return { text: 'PENDENTE', style: 'background: #e3f2fd; color: #1565c0;' };
+    }
+}
+
+// ===== MODAL FIADOS =====
+function abrirModalFiado(fiadoIndex = null) {
+    const modal = document.getElementById('fiadoModal');
+    const title = document.getElementById('modalFiadoTitle');
+    const container = document.getElementById('produtosFiadoContainer');
+    
+    // Limpar container de produtos
+    container.innerHTML = '';
+    
+    if (fiadoIndex !== null && fiados[fiadoIndex]) {
+        title.textContent = 'Editar Fiado';
+        fiadoEditando = fiados[fiadoIndex];
+        
+        document.getElementById('fiadoIndex').value = fiadoIndex;
+        document.getElementById('nomeCliente').value = fiadoEditando.nomeCliente;
+        document.getElementById('telefoneCliente').value = fiadoEditando.telefone || '';
+        document.getElementById('prazoPagamento').value = fiadoEditando.prazoPagamento;
+        document.getElementById('dataRetirada').value = fiadoEditando.dataRetirada || '';
+        document.getElementById('valorPago').value = fiadoEditando.valorPago || 0;
+        document.getElementById('observacoes').value = fiadoEditando.observacoes || '';
+        
+        // Adicionar produtos do fiado
+        if (fiadoEditando.itens && fiadoEditando.itens.length > 0) {
+            fiadoEditando.itens.forEach((item, index) => {
+                adicionarProdutoFiado(item.produtoId, item.quantidade);
+            });
+        } else {
+            adicionarProdutoFiado(); // Adicionar linha vazia
+        }
+        
+        atualizarTotalFiado();
+    } else {
+        title.textContent = 'Novo Fiado';
+        fiadoEditando = null;
+        document.getElementById('fiadoForm').reset();
+        document.getElementById('fiadoIndex').value = '';
+        document.getElementById('prazoPagamento').value = new Date().toISOString().split('T')[0];
+        document.getElementById('dataRetirada').value = new Date().toISOString().split('T')[0];
+        
+        // Adicionar primeira linha de produto
+        adicionarProdutoFiado();
+    }
+    
+    modal.classList.add('active');
+}
+
+function fecharModalFiado() {
+    document.getElementById('fiadoModal').classList.remove('active');
+    fiadoEditando = null;
+}
+
+function adicionarProdutoFiado(produtoId = '', quantidade = 1) {
+    const container = document.getElementById('produtosFiadoContainer');
+    const index = container.children.length;
+    
+    const produtosDisponiveis = produtos.filter(p => p.ativo);
+    
+    const div = document.createElement('div');
+    div.className = 'produto-fiado-item';
+    div.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px; align-items: center;';
+    
+    div.innerHTML = `
+        <select class="form-input produto-select" data-index="${index}" style="flex: 2;" onchange="atualizarTotalFiado()">
+            <option value="">Selecione um produto</option>
+            ${produtosDisponiveis.map(p => `
+                <option value="${p.id}" ${p.id == produtoId ? 'selected' : ''}>
+                    ${p.emoji} ${p.nome} - R$ ${formatPrice(p.preco)} (Estoque: ${p.estoque})
+                </option>
+            `).join('')}
+        </select>
+        <input type="number" class="form-input quantidade-produto" data-index="${index}" 
+               value="${quantidade}" min="1" style="flex: 1;" onchange="atualizarTotalFiado()" 
+               placeholder="Qtd">
+        <button type="button" class="btn-primary" onclick="removerProdutoFiado(${index})" 
+                style="background: var(--danger); padding: 8px 12px;">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+    
+    container.appendChild(div);
+    atualizarTotalFiado();
+}
+
+function removerProdutoFiado(index) {
+    const container = document.getElementById('produtosFiadoContainer');
+    const item = container.querySelector(`[data-index="${index}"]`);
+    if (item && container.children.length > 1) {
+        item.parentElement.remove();
+        // Reindexar os elementos restantes
+        const itens = container.querySelectorAll('.produto-fiado-item');
+        itens.forEach((item, newIndex) => {
+            const select = item.querySelector('.produto-select');
+            const input = item.querySelector('.quantidade-produto');
+            if (select) select.dataset.index = newIndex;
+            if (input) input.dataset.index = newIndex;
+        });
+        atualizarTotalFiado();
+    }
+}
+
+function atualizarTotalFiado() {
+    const container = document.getElementById('produtosFiadoContainer');
+    const selects = container.querySelectorAll('.produto-select');
+    const inputs = container.querySelectorAll('.quantidade-produto');
+    
+    let total = 0;
+    
+    selects.forEach((select, index) => {
+        const produtoId = select.value;
+        const quantidade = parseFloat(inputs[index]?.value) || 0;
+        
+        if (produtoId && quantidade > 0) {
+            const produto = produtos.find(p => p.id == produtoId);
+            if (produto) {
+                total += produto.preco * quantidade;
+            }
+        }
+    });
+    
+    document.getElementById('fiadoTotal').textContent = `R$ ${formatPrice(total)}`;
+}
+
+function salvarFiado() {
+    try {
+        const nomeCliente = document.getElementById('nomeCliente').value;
+        const prazoPagamento = document.getElementById('prazoPagamento').value;
+        
+        if (!nomeCliente || !prazoPagamento) {
+            showNotification('Preencha nome do cliente e prazo de pagamento!', 'error');
+            return;
+        }
+        
+        const container = document.getElementById('produtosFiadoContainer');
+        const selects = container.querySelectorAll('.produto-select');
+        const inputs = container.querySelectorAll('.quantidade-produto');
+        
+        const itens = [];
+        let total = 0;
+        
+        selects.forEach((select, index) => {
+            const produtoId = select.value;
+            const quantidade = parseFloat(inputs[index]?.value) || 0;
+            
+            if (produtoId && quantidade > 0) {
+                const produto = produtos.find(p => p.id == produtoId);
+                if (produto) {
+                    itens.push({
+                        produtoId: produto.id,
+                        nome: produto.nome,
+                        quantidade: quantidade,
+                        preco: produto.preco
+                    });
+                    total += produto.preco * quantidade;
+                }
+            }
+        });
+        
+        if (itens.length === 0) {
+            showNotification('Adicione pelo menos um produto!', 'error');
+            return;
+        }
+        
+        const fiadoIndex = document.getElementById('fiadoIndex').value;
+        const valorPago = parseFloat(document.getElementById('valorPago').value) || 0;
+        
+        const fiadoData = {
+            id: fiadoEditando ? fiadoEditando.id : Date.now(),
+            nomeCliente: nomeCliente,
+            telefone: document.getElementById('telefoneCliente').value,
+            itens: itens,
+            total: total,
+            valorPago: valorPago,
+            prazoPagamento: prazoPagamento,
+            dataRetirada: document.getElementById('dataRetirada').value || new Date().toISOString().split('T')[0],
+            dataCriacao: new Date().toISOString().split('T')[0],
+            observacoes: document.getElementById('observacoes').value,
+            status: valorPago >= total ? 'pago' : (valorPago > 0 ? 'parcial' : 'pendente'),
+            pagamentos: fiadoEditando?.pagamentos || []
+        };
+        
+        // Atualizar estoque dos produtos
+        itens.forEach(item => {
+            const produto = produtos.find(p => p.id === item.produtoId);
+            if (produto) {
+                produto.estoque -= item.quantidade;
+            }
+        });
+        
+        if (fiadoIndex !== '') {
+            // Editar fiado existente
+            fiados[fiadoIndex] = fiadoData;
+            showNotification('✅ Fiado atualizado!', 'success');
+        } else {
+            // Novo fiado
+            fiados.unshift(fiadoData);
+            showNotification('✅ Fiado salvo!', 'success');
+        }
+        
+        // Fechar modal e atualizar
+        fecharModalFiado();
+        saveAllData();
+        carregarFiados();
+        calcularResumoFiados();
+        loadProductsForSale();
+        loadProductsList();
+        
+    } catch (error) {
+        console.error('Erro ao salvar fiado:', error);
+        showNotification('Erro ao salvar fiado!', 'error');
+    }
+}
+
+function abrirModalFiadoParaVenda() {
+    // Preencher automaticamente com os produtos do carrinho
+    const modal = document.getElementById('fiadoModal');
+    const container = document.getElementById('produtosFiadoContainer');
+    
+    // Limpar container
+    container.innerHTML = '';
+    
+    // Adicionar produtos do carrinho
+    carrinho.forEach(item => {
+        adicionarProdutoFiado(item.produtoId, item.quantidade);
+    });
+    
+    // Abrir modal
+    modal.classList.add('active');
+}
+
+function abrirPagamentoModal(fiadoIndex) {
+    const fiado = fiados[fiadoIndex];
+    if (!fiado) return;
+    
+    const modal = document.getElementById('pagamentoModal');
+    const infoDiv = document.getElementById('pagamentoInfo');
+    
+    infoDiv.innerHTML = `
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+            <div style="font-weight: 700; margin-bottom: 5px;">${fiado.nomeCliente}</div>
+            <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">
+                Total: R$ ${formatPrice(fiado.total)} | 
+                Pago: R$ ${formatPrice(fiado.valorPago)} | 
+                Pendente: R$ ${formatPrice(fiado.total - fiado.valorPago)}
+            </div>
+            <div style="font-size: 12px; color: var(--gray);">
+                Prazo: ${formatarData(fiado.prazoPagamento)}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('valorPagamento').value = '';
+    document.getElementById('dataPagamento').value = new Date().toISOString().split('T')[0];
+    document.getElementById('formaPagamento').value = 'dinheiro';
+    document.getElementById('obsPagamento').value = '';
+    
+    // Salvar índice do fiado no modal
+    modal.dataset.fiadoIndex = fiadoIndex;
+    
+    modal.classList.add('active');
+}
+
+function fecharPagamentoModal() {
+    document.getElementById('pagamentoModal').classList.remove('active');
+}
+
+function confirmarPagamento() {
+    const fiadoIndex = document.getElementById('pagamentoModal').dataset.fiadoIndex;
+    if (fiadoIndex === undefined) return;
+    
+    const fiado = fiados[fiadoIndex];
+    if (!fiado) return;
+    
+    const valorPagamento = parseFloat(document.getElementById('valorPagamento').value);
+    const dataPagamento = document.getElementById('dataPagamento').value;
+    const formaPagamento = document.getElementById('formaPagamento').value;
+    const observacoes = document.getElementById('obsPagamento').value;
+    
+    if (!valorPagamento || valorPagamento <= 0) {
+        showNotification('Informe um valor válido!', 'error');
+        return;
+    }
+    
+    // Criar objeto de pagamento
+    const pagamento = {
+        id: Date.now(),
+        data: dataPagamento,
+        valor: valorPagamento,
+        forma: formaPagamento,
+        observacoes: observacoes
+    };
+    
+    // Adicionar pagamento ao fiado
+    if (!fiado.pagamentos) fiado.pagamentos = [];
+    fiado.pagamentos.push(pagamento);
+    
+    // Atualizar valor pago
+    fiado.valorPago = (fiado.valorPago || 0) + valorPagamento;
+    
+    // Atualizar status
+    if (fiado.valorPago >= fiado.total) {
+        fiado.status = 'pago';
+    } else if (fiado.valorPago > 0) {
+        fiado.status = 'parcial';
+    }
+    
+    // Atualizar dados
+    fiados[fiadoIndex] = fiado;
+    
+    // Fechar modal e atualizar
+    fecharPagamentoModal();
+    saveAllData();
+    carregarFiados();
+    calcularResumoFiados();
+    
+    showNotification(`✅ Pagamento de R$ ${formatPrice(valorPagamento)} registrado!`, 'success');
+}
+
+function editarFiado(index) {
+    abrirModalFiado(index);
+}
+
+function excluirFiado(index) {
+    if (confirm('Excluir este fiado?')) {
+        fiados.splice(index, 1);
+        saveAllData();
+        carregarFiados();
+        calcularResumoFiados();
+        showNotification('✅ Fiado excluído!', 'success');
+    }
+}
+
+function exportarFiados() {
+    const backup = {
+        fiados: fiados,
+        timestamp: new Date().toISOString(),
+        totalFiados: fiados.length,
+        totalReceber: fiados.reduce((sum, f) => f.status !== 'pago' ? sum + (f.total - f.valorPago) : sum, 0)
+    };
+    
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fiados_chopmanager_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showNotification('✅ Fiados exportados com sucesso!', 'success');
+}
+
 // ===== RELATÓRIOS =====
 function loadReports() {
     const reportContent = document.getElementById('reportContent');
@@ -2562,47 +3400,131 @@ function loadReports() {
     `;
     
     setTimeout(() => {
-        const totalVendas = vendas.length;
-        const totalFaturamento = vendas.reduce((sum, v) => sum + (v.total || 0), 0);
-        const totalItensVendidos = vendas.reduce((sum, v) => 
-            sum + v.itens.reduce((s, i) => s + (i.quantidade || 0), 0), 0);
+        // Calcular períodos
+        const hoje = new Date();
+        const ontem = new Date(hoje);
+        ontem.setDate(ontem.getDate() - 1);
+        const semanaPassada = new Date(hoje);
+        semanaPassada.setDate(semanaPassada.getDate() - 7);
+        
+        const hojeStr = hoje.toISOString().split('T')[0];
+        const ontemStr = ontem.toISOString().split('T')[0];
+        
+        // Filtrar vendas por período
+        const vendasHoje = vendas.filter(v => v.data === hojeStr);
+        const vendasOntem = vendas.filter(v => v.data === ontemStr);
+        const vendasSemana = vendas.filter(v => new Date(v.data) >= semanaPassada);
+        const vendasMes = vendas.filter(v => {
+            const dataVenda = new Date(v.data);
+            return dataVenda.getMonth() === hoje.getMonth() && 
+                   dataVenda.getFullYear() === hoje.getFullYear();
+        });
+        
+        // Calcular totais
+        const totalHoje = vendasHoje.reduce((sum, v) => sum + (v.total || 0), 0);
+        const totalOntem = vendasOntem.reduce((sum, v) => sum + (v.total || 0), 0);
+        const totalSemana = vendasSemana.reduce((sum, v) => sum + (v.total || 0), 0);
+        const totalMes = vendasMes.reduce((sum, v) => sum + (v.total || 0), 0);
+        const totalGeral = vendas.reduce((sum, v) => sum + (v.total || 0), 0);
+        
+        // Calcular fiados
+        const fiadosPendentes = fiados.filter(f => f.status !== 'pago').length;
+        const totalFiadosPendentes = fiados
+            .filter(f => f.status !== 'pago')
+            .reduce((sum, f) => sum + (f.total - f.valorPago), 0);
         
         reportContent.innerHTML = `
             <div>
                 <h3 style="color: var(--dark); margin-bottom: 20px; font-size: 24px;">
-                    <i class="fas fa-chart-bar"></i> Resumo Geral
+                    <i class="fas fa-chart-bar"></i> Relatório Completo - ${formatarDataRelatorio(hojeStr)}
                 </h3>
                 
+                <!-- RESUMO POR PERÍODO -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Total Vendas</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--primary);">${totalVendas}</div>
+                    <div style="background: #f0f7ff; padding: 15px; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--gray);">HOJE</div>
+                        <div style="font-size: 24px; font-weight: 900; color: var(--primary);">
+                            R$ ${formatPrice(totalHoje)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                            ${vendasHoje.length} vendas
+                        </div>
                     </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Faturamento Total</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--success);">R$ ${formatPrice(totalFaturamento)}</div>
+                    
+                    <div style="background: #f0fff4; padding: 15px; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--gray);">SEMANA</div>
+                        <div style="font-size: 24px; font-weight: 900; color: var(--success);">
+                            R$ ${formatPrice(totalSemana)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                            ${vendasSemana.length} vendas
+                        </div>
                     </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Itens Vendidos</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--secondary);">${totalItensVendidos}</div>
+                    
+                    <div style="background: #fff8e1; padding: 15px; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--gray);">MÊS</div>
+                        <div style="font-size: 24px; font-weight: 900; color: var(--warning);">
+                            R$ ${formatPrice(totalMes)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                            ${vendasMes.length} vendas
+                        </div>
                     </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Produtos</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--accent);">${produtos.length}</div>
+                    
+                    <div style="background: #ffebee; padding: 15px; border-radius: 10px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--gray);">FIADOS PEND.</div>
+                        <div style="font-size: 24px; font-weight: 900; color: var(--danger);">
+                            R$ ${formatPrice(totalFiadosPendentes)}
+                        </div>
+                        <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                            ${fiadosPendentes} clientes
+                        </div>
                     </div>
                 </div>
                 
+                <!-- RESUMO GERAL -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 15px; margin-bottom: 30px;">
+                    <h4 style="color: var(--dark); margin-bottom: 15px; font-size: 18px;">
+                        <i class="fas fa-chart-line"></i> Resumo Geral
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                        <div>
+                            <div style="font-size: 14px; color: var(--gray);">Total de Vendas:</div>
+                            <div style="font-size: 18px; font-weight: 700;">${vendas.length}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; color: var(--gray);">Faturamento Total:</div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--success);">R$ ${formatPrice(totalGeral)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; color: var(--gray);">Produtos Cadastrados:</div>
+                            <div style="font-size: 18px; font-weight: 700;">${produtos.length}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; color: var(--gray);">Fiados Ativos:</div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--warning);">${fiados.length}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ÚLTIMAS VENDAS -->
                 <h4 style="color: var(--dark); margin: 30px 0 15px 0;">Últimas Vendas</h4>
                 <div style="max-height: 300px; overflow-y: auto;">
-                    ${generateSalesTable()}
+                    ${generateSalesTable(vendas.slice(0, 10))}
+                </div>
+                
+                <!-- FIADOS PENDENTES -->
+                <h4 style="color: var(--dark); margin: 30px 0 15px 0;">Fiados Pendentes</h4>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    ${generateFiadosTable(fiados.filter(f => f.status !== 'pago').slice(0, 10))}
                 </div>
             </div>
         `;
     }, 1000);
 }
 
-function generateSalesTable() {
-    if (vendas.length === 0) {
+function generateSalesTable(vendasList) {
+    if (vendasList.length === 0) {
         return '<p style="text-align: center; color: var(--gray); padding: 20px;">Nenhuma venda registrada</p>';
     }
     
@@ -2620,17 +3542,62 @@ function generateSalesTable() {
             <tbody>
     `;
     
-    vendas.slice(0, 20).forEach(venda => {
+    vendasList.forEach(venda => {
         const totalItens = venda.itens.reduce((sum, item) => sum + (item.quantidade || 0), 0);
+        const dataFormatada = formatarDataRelatorio(venda.data);
+        
         html += `
             <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 10px;">${venda.data}</td>
+                <td style="padding: 10px;">${dataFormatada}</td>
                 <td style="padding: 10px;">${venda.hora}</td>
                 <td style="padding: 10px;">${totalItens}</td>
                 <td style="padding: 10px; font-weight: 700;">R$ ${formatPrice(venda.total)}</td>
                 <td style="padding: 10px;">
                     <span style="padding: 2px 8px; border-radius: 10px; background: #e3f2fd; color: #1565c0; font-size: 12px;">
                         ${(venda.pagamento || '').toUpperCase()}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    return html;
+}
+
+function generateFiadosTable(fiadosList) {
+    if (fiadosList.length === 0) {
+        return '<p style="text-align: center; color: var(--gray); padding: 20px;">Nenhum fiado pendente</p>';
+    }
+    
+    let html = `
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+                <tr style="background: #f8f9fa;">
+                    <th style="padding: 10px; text-align: left;">Cliente</th>
+                    <th style="padding: 10px; text-align: left;">Prazo</th>
+                    <th style="padding: 10px; text-align: left;">Total</th>
+                    <th style="padding: 10px; text-align: left;">Pendente</th>
+                    <th style="padding: 10px; text-align: left;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    fiadosList.forEach(fiado => {
+        const totalPendente = fiado.total - fiado.valorPago;
+        const prazoFormatado = formatarDataRelatorio(fiado.prazoPagamento);
+        const statusClass = getStatusClass(fiado);
+        
+        html += `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">${fiado.nomeCliente}</td>
+                <td style="padding: 10px;">${prazoFormatado}</td>
+                <td style="padding: 10px;">R$ ${formatPrice(fiado.total)}</td>
+                <td style="padding: 10px; font-weight: 700; color: var(--warning);">R$ ${formatPrice(totalPendente)}</td>
+                <td style="padding: 10px;">
+                    <span style="padding: 2px 8px; border-radius: 10px; font-size: 12px; ${statusClass.style}">
+                        ${statusClass.text}
                     </span>
                 </td>
             </tr>
@@ -2660,6 +3627,8 @@ function printReport() {
                 table { width: 100%; border-collapse: collapse; margin: 20px 0; }
                 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                 th { background-color: #f2f2f2; }
+                .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+                .summary-card { padding: 15px; border-radius: 10px; text-align: center; }
             </style>
         </head>
         <body>
@@ -2679,10 +3648,13 @@ function backupData() {
     const backup = {
         produtos: produtos,
         vendas: vendas,
+        fiados: fiados,
         timestamp: new Date().toISOString(),
         totalProdutos: produtos.length,
         totalVendas: vendas.length,
-        totalFaturamento: vendas.reduce((sum, v) => sum + (v.total || 0), 0)
+        totalFiados: fiados.length,
+        totalFaturamento: vendas.reduce((sum, v) => sum + (v.total || 0), 0),
+        totalReceber: fiados.reduce((sum, f) => f.status !== 'pago' ? sum + (f.total - f.valorPago) : sum, 0)
     };
     
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -2718,6 +3690,7 @@ function showNotification(mensagem, tipo = 'info') {
 function saveAllData() {
     localStorage.setItem('chop_produtos', JSON.stringify(produtos));
     localStorage.setItem('chop_vendas', JSON.stringify(vendas));
+    localStorage.setItem('chop_fiados', JSON.stringify(fiados));
 }
 
 // ===== FUNÇÃO DE SINCRONIZAÇÃO =====
@@ -2757,6 +3730,8 @@ window.forceLoadNeonData = async function() {
             loadDashboard();
             loadProductsForSale();
             loadProductsList();
+            carregarFiados();
+            calcularResumoFiados();
             
             showNotification('✅ Dados carregados com sucesso!', 'success');
         } else {
