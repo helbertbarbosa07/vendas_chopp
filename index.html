@@ -2736,45 +2736,33 @@ async function saveProductToNeon(product) {
 // ===== ESTATÍSTICAS =====
 async function updateStatistics() {
     try {
-        // Atualizar do localStorage primeiro
-        document.getElementById("totalProducts").textContent = produtos.length;
-        document.getElementById("totalSales").textContent = vendas.length;
-        
-        const totalRevenue = vendas.reduce((sum, v) => sum + (v.total || 0), 0);
-        document.getElementById("totalRevenue").textContent = `R$ ${formatPrice(totalRevenue)}`;
-        
-        // Tentar atualizar do Neon se estiver online
-        if (dbOnline) {
-            try {
-                const response = await fetch("/api/neon", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sql: `
-                            SELECT 
-                              (SELECT COUNT(*) FROM produtos) AS total_produtos,
-                              (SELECT COUNT(*) FROM vendas) AS total_vendas,
-                              (SELECT COALESCE(SUM(total),0) FROM vendas) AS faturamento
-                        `
-                    })
-                });
+        const res = await fetch('/api/neon', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sql: `
+                    SELECT
+                        (SELECT COUNT(*) FROM produtos) AS total_produtos,
+                        (SELECT COUNT(*) FROM vendas) AS total_vendas,
+                        (SELECT COALESCE(SUM(total), 0) FROM vendas) AS faturamento
+                `
+            })
+        });
 
-                const result = await response.json();
+        const data = await res.json();
+        if (!data.success) throw new Error('Erro Neon');
 
-                if (result.success) {
-                    const data = result.rows[0];
-                    document.getElementById("totalProducts").textContent = data.total_produtos;
-                    document.getElementById("totalSales").textContent = data.total_vendas;
-                    document.getElementById("totalRevenue").textContent = `R$ ${formatPrice(data.faturamento)}`;
-                }
-            } catch (err) {
-                console.log("Usando dados locais para estatísticas");
-            }
-        }
+        const stats = data.rows[0];
+
+        document.getElementById('totalProducts').innerText = stats.total_produtos;
+        document.getElementById('totalSales').innerText = stats.total_vendas;
+        document.getElementById('totalRevenue').innerText =
+            'R$ ' + Number(stats.faturamento).toFixed(2);
+
     } catch (err) {
-        console.error("Erro ao atualizar estatísticas:", err);
+        console.error('Erro updateStatistics:', err);
     }
-}
+};
 
 // ===== GRÁFICOS =====
 function updateCharts() {
