@@ -1,50 +1,28 @@
 // api/neon.js
-import { Pool } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
 
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-});
+const sql = neon(process.env.DATABASE_URL);
 
 export default async function handler(req, res) {
-  // Configurar CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // Permite que seu frontend converse com esta API
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método não permitido' });
   }
 
   try {
-    const { sql, params = [] } = req.body;
-
-    if (!sql) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'SQL query é obrigatória' 
-      });
-    }
-
-    console.log('Executando query:', sql.substring(0, 200));
-    
-    const result = await pool.query(sql, params);
-    
-    res.status(200).json({
-      success: true,
-      rows: result.rows,
-      rowCount: result.rowCount
-    });
-    
+    const { sql: query, params = [] } = req.body;
+    const result = await sql(query, params);
+    res.status(200).json({ success: true, rows: result });
   } catch (error) {
-    console.error('Erro na query:', error.message);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message
-    });
+    console.error('Erro na API:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }
