@@ -1549,13 +1549,13 @@
     <div class="notification" id="notification"></div>
 
 <script>
-// ===== CONFIGURAÇÃO =====
+    // ===== CONFIGURAÇÃO =====
 const API_URL = window.location.origin + '/api/neon';
 
 // ===== DADOS DO SISTEMA =====
-let produtos = JSON.parse(localStorage.getItem('chop_produtos')) || [];
-let vendas = JSON.parse(localStorage.getItem('chop_vendas')) || [];
-let fiados = JSON.parse(localStorage.getItem('chop_fiados')) || [];
+let produtos = [];
+let vendas = [];
+let fiados = [];
 let carrinho = [];
 let charts = {};
 let dbOnline = false;
@@ -1670,17 +1670,27 @@ window.deleteProduct = async function(id) {
     const produto = produtos.find(p => p.id === id);
     if (produto && confirm(`Excluir "${produto.nome}"?`)) {
         try {
+            // 1. REMOVER DO BANCO DE DADOS (se estiver online)
             if (dbOnline) {
                 await neonQuery('DELETE FROM produtos WHERE id = $1', [id]);
             }
-            produtos = produtos.filter(p => p.id !== id);
+            
+            // 2. REMOVER DO FRONTEND (lista de produtos)
+            const index = produtos.findIndex(p => p.id === id);
+            if (index !== -1) {
+                produtos.splice(index, 1);
+            }
+            
             showNotification('✅ Produto excluído!', 'success');
+            
+            // 3. ATUALIZAR TODAS AS VIEWS
             loadProductsList();
             loadProductsForSale();
             loadDashboard();
-            saveAllData();
+            
         } catch (error) {
-            showNotification('Erro ao excluir!', 'error');
+            console.error('Erro ao excluir produto:', error);
+            showNotification('❌ Erro ao excluir produto!', 'error');
         }
     }
 };
@@ -1799,7 +1809,7 @@ function setupEventListeners() {
     document.getElementById('printReport')?.addEventListener('click', printReport);
     document.getElementById('backupBtn')?.addEventListener('click', backupData);
     
-    // Upload de foto - FIX CORRIGIDO
+    // Upload de foto
     const photoContainer = document.getElementById('photoUploadContainer');
     const photoInput = document.getElementById('productPhoto');
     
@@ -1812,7 +1822,6 @@ function setupEventListeners() {
             if (this.files && this.files[0]) {
                 const file = this.files[0];
                 
-                // Verificar tamanho (max 2MB)
                 if (file.size > 2 * 1024 * 1024) {
                     showNotification('Imagem muito grande! Máximo 2MB.', 'error');
                     return;
@@ -1820,15 +1829,12 @@ function setupEventListeners() {
                 
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    // Salvar como base64
                     const base64String = e.target.result;
                     
-                    // Atualizar preview
                     const preview = document.getElementById('photoPreview');
                     preview.src = base64String;
                     preview.classList.add('show');
                     
-                    // Salvar no campo hidden
                     document.getElementById('productPhotoData').value = base64String;
                 };
                 reader.readAsDataURL(file);
@@ -1883,12 +1889,10 @@ function initComponents() {
 }
 
 function initFiadosSystem() {
-    // Data padrão para prazo (7 dias a partir de hoje)
     const prazoPadrao = new Date();
     prazoPadrao.setDate(prazoPadrao.getDate() + 7);
     document.getElementById('prazoPagamento').value = prazoPadrao.toISOString().split('T')[0];
     
-    // Data padrão para retirada (hoje)
     const hoje = new Date().toISOString().split('T')[0];
     document.getElementById('dataRetirada').value = hoje;
 }
@@ -1897,17 +1901,14 @@ async function tryConnectNeon() {
     try {
         console.log('🔄 Tentando conectar ao Neon DB...');
         
-        // Testar conexão
         const testResult = await neonQuery('SELECT NOW() as teste');
         
         if (testResult && testResult.success) {
             dbOnline = true;
             console.log('✅ Conectado ao Neon DB');
             
-            // Carregar dados do Neon
             await loadFromNeon();
             
-            // Atualizar status do botão
             updateSyncButtonStatus();
             
             return true;
@@ -1919,15 +1920,9 @@ async function tryConnectNeon() {
         console.log('❌ Erro de conexão Neon:', error);
         dbOnline = false;
         
-        // Usar dados do localStorage como fallback
-        produtos = JSON.parse(localStorage.getItem('chop_produtos')) || [];
-        vendas = JSON.parse(localStorage.getItem('chop_vendas')) || [];
-        fiados = JSON.parse(localStorage.getItem('chop_fiados')) || [];
-        
-        // Atualizar status do botão
         updateSyncButtonStatus();
         
-        showNotification('⚠️ Modo offline - usando dados locais', 'warning');
+        showNotification('⚠️ Sem conexão com o banco de dados', 'warning');
         return false;
     }
 }
@@ -2021,7 +2016,6 @@ async function loadFromNeon() {
             }
         } catch (vendasError) {
             console.log('⚠️ Erro ao carregar vendas:', vendasError);
-            // Tentar carregar de forma simples
             try {
                 const vendasSimples = await neonQuery('SELECT * FROM vendas ORDER BY data DESC, hora DESC');
                 if (vendasSimples && vendasSimples.rows) {
@@ -2040,8 +2034,29 @@ async function loadFromNeon() {
             }
         }
         
-        // 3. SALVAR NO LOCALSTORAGE PARA BACKUP
-        saveAllData();
+        // 3. CARREGAR FIADOS (se existir tabela)
+        try {
+            const fiadosData = await neonQuery('SELECT * FROM fiados ORDER BY data_criacao DESC');
+            if (fiadosData && fiadosData.rows) {
+                fiados = fiadosData.rows.map(f => ({
+                    id: f.id,
+                    nomeCliente: f.nome_cliente,
+                    telefone: f.telefone,
+                    itens: f.itens ? JSON.parse(f.itens) : [],
+                    total: Number(f.total) || 0,
+                    valorPago: Number(f.valor_pago) || 0,
+                    prazoPagamento: f.prazo_pagamento,
+                    dataRetirada: f.data_retirada,
+                    dataCriacao: f.data_criacao,
+                    observacoes: f.observacoes,
+                    status: f.status || 'pendente',
+                    pagamentos: f.pagamentos ? JSON.parse(f.pagamentos) : []
+                }));
+                console.log(`✅ ${fiados.length} fiados carregados do Neon`);
+            }
+        } catch (fiadosError) {
+            console.log('⚠️ Tabela de fiados não encontrada ou erro:', fiadosError);
+        }
         
         // 4. ATUALIZAR FRONT-END IMEDIATAMENTE
         loadDashboard();
@@ -2384,55 +2399,54 @@ async function finalizeSale() {
             pagamento: formaPagamento
         };
         
-        let savedInNeon = false;
-        
-        // Tentar salvar no Neon se estiver online
+        // 1. SALVAR NO BANCO DE DADOS (se estiver online)
         if (dbOnline) {
             try {
                 const vendaSalva = await saveSaleToNeon(novaVenda);
                 novaVenda.id = vendaSalva.id;
-                savedInNeon = true;
                 showNotification(`✅ Venda salva no banco! R$ ${formatPrice(total)}`, 'success');
             } catch (neonError) {
                 console.error('Erro ao salvar no Neon:', neonError);
-                savedInNeon = false;
+                showNotification('⚠️ Erro ao salvar no banco, tentando novamente...', 'warning');
+                return;
+            }
+        } else {
+            showNotification('⚠️ Sem conexão com o banco de dados', 'warning');
+            return;
+        }
+        
+        // 2. ATUALIZAR ESTOQUE NO BANCO E NO FRONTEND SIMULTANEAMENTE
+        for (const itemCarrinho of carrinho) {
+            const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
+            if (produto) {
+                // Atualizar estoque no banco (se online)
+                if (dbOnline) {
+                    await neonQuery(`
+                        UPDATE produtos 
+                        SET estoque = estoque - $1, vendas = vendas + $1
+                        WHERE id = $2
+                    `, [itemCarrinho.quantidade, itemCarrinho.produtoId]);
+                }
+                
+                // Atualizar estoque no frontend
+                produto.estoque -= itemCarrinho.quantidade;
+                produto.vendas = (produto.vendas || 0) + itemCarrinho.quantidade;
             }
         }
         
-        // Atualizar estoque dos produtos LOCALMENTE
-        carrinho.forEach(itemCarrinho => {
-            const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
-            if (produto) {
-                // Atualizar estoque
-                produto.estoque -= itemCarrinho.quantidade;
-                // Atualizar contador de vendas
-                produto.vendas = (produto.vendas || 0) + itemCarrinho.quantidade;
-            }
-        });
-        
-        // Adicionar venda à lista LOCAL
+        // 3. ADICIONAR VENDA À LISTA NO FRONTEND
         vendas.unshift(novaVenda);
         
-        // Limpar carrinho
+        // 4. LIMPAR CARRINHO
         carrinho = [];
         
-        // ATUALIZAR FRONT-END IMEDIATAMENTE
+        // 5. ATUALIZAR FRONT-END IMEDIATAMENTE
         updateCart();
-        saveAllData();
         loadDashboard();
         loadProductsForSale();
         loadProductsList();
         
-        // Se salvou no Neon, recarregar dados do banco
-        if (savedInNeon) {
-            setTimeout(async () => {
-                await loadFromNeon();
-            }, 500);
-        } else {
-            showNotification(`✅ Venda salva localmente! R$ ${formatPrice(total)}`, 'info');
-        }
-        
-        // Navegar para dashboard
+        // 6. Navegar para dashboard
         setTimeout(() => {
             if (document.querySelector('.nav-tab.active').dataset.page !== 'dashboard') {
                 navigateTo('dashboard');
@@ -2441,7 +2455,7 @@ async function finalizeSale() {
         
     } catch (error) {
         console.error('Erro ao finalizar venda:', error);
-        showNotification('Erro ao finalizar venda!', 'error');
+        showNotification('❌ Erro ao finalizar venda!', 'error');
     }
 }
 
@@ -2460,12 +2474,6 @@ async function saveSaleToNeon(sale) {
                 INSERT INTO venda_itens (venda_id, produto_id, nome, quantidade, preco)
                 VALUES ($1, $2, $3, $4, $5)
             `, [vendaId, item.produtoId, item.nome, item.quantidade, item.preco]);
-            
-            await neonQuery(`
-                UPDATE produtos 
-                SET estoque = estoque - $1, vendas = vendas + $1
-                WHERE id = $2
-            `, [item.quantidade, item.produtoId]);
         }
         
         sale.id = vendaId;
@@ -2645,8 +2653,6 @@ async function saveProduct() {
             foto: document.getElementById('productPhotoData').value || null
         };
         
-        let savedInNeon = false;
-        
         // Se for edição, manter o ID e vendas
         if (isEditing) {
             const produtoExistente = produtos.find(p => p.id === parseInt(id));
@@ -2659,20 +2665,41 @@ async function saveProduct() {
             produtoData.id = Date.now();
         }
         
-        // Tentar salvar no Neon se estiver online
+        // 1. SALVAR/ATUALIZAR NO BANCO DE DADOS
         if (dbOnline) {
             try {
-                const produtoSalvo = await saveProductToNeon(produtoData);
-                produtoData.id = produtoSalvo.id;
-                savedInNeon = true;
-                showNotification('✅ Produto salvo no banco!', 'success');
+                if (isEditing) {
+                    await neonQuery(`
+                        UPDATE produtos 
+                        SET nome = $1, descricao = $2, preco = $3, estoque = $4, 
+                            emoji = $5, cor = $6, ativo = $7, foto = $8
+                        WHERE id = $9
+                    `, [
+                        produtoData.nome, produtoData.descricao, produtoData.preco, produtoData.estoque,
+                        produtoData.emoji, produtoData.cor, produtoData.ativo, produtoData.foto, produtoData.id
+                    ]);
+                } else {
+                    const result = await neonQuery(`
+                        INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas, foto)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8)
+                        RETURNING id
+                    `, [
+                        produtoData.nome, produtoData.descricao, produtoData.preco, produtoData.estoque,
+                        produtoData.emoji, produtoData.cor, produtoData.ativo, produtoData.foto
+                    ]);
+                    produtoData.id = result.rows[0].id;
+                }
             } catch (neonError) {
                 console.error('Erro ao salvar no Neon:', neonError);
-                savedInNeon = false;
+                showNotification('❌ Erro ao salvar no banco de dados', 'error');
+                return;
             }
+        } else {
+            showNotification('⚠️ Sem conexão com o banco de dados', 'warning');
+            return;
         }
         
-        // Atualizar localmente
+        // 2. ATUALIZAR NO FRONTEND
         if (isEditing) {
             const index = produtos.findIndex(p => p.id === produtoData.id);
             if (index !== -1) {
@@ -2682,60 +2709,31 @@ async function saveProduct() {
             produtos.push(produtoData);
         }
         
-        // ATUALIZAR FRONT-END IMEDIATAMENTE
+        // 3. FECHAR MODAL E ATUALIZAR VIEWS
         closeProductModal();
-        saveAllData();
         loadProductsList();
         loadProductsForSale();
         loadDashboard();
         
-        // Se salvou no Neon, recarregar dados do banco
-        if (savedInNeon) {
-            setTimeout(async () => {
-                await loadFromNeon();
-            }, 500);
-        } else {
-            showNotification('✅ Produto salvo localmente!', 'info');
-        }
+        showNotification('✅ Produto salvo com sucesso!', 'success');
         
     } catch (error) {
         console.error('Erro ao salvar produto:', error);
-        showNotification('Erro ao salvar produto!', 'error');
-    }
-}
-
-async function saveProductToNeon(product) {
-    try {
-        if (product.id) {
-            await neonQuery(`
-                UPDATE produtos 
-                SET nome = $1, descricao = $2, preco = $3, estoque = $4, 
-                    emoji = $5, cor = $6, ativo = $7, foto = $8
-                WHERE id = $9
-            `, [
-                product.nome, product.descricao, product.preco, product.estoque,
-                product.emoji, product.cor, product.ativo, product.foto, product.id
-            ]);
-        } else {
-            const result = await neonQuery(`
-                INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, vendas, foto)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8)
-                RETURNING id
-            `, [
-                product.nome, product.descricao, product.preco, product.estoque,
-                product.emoji, product.cor, product.ativo, product.foto
-            ]);
-            product.id = result.rows[0].id;
-        }
-        return product;
-    } catch (error) {
-        throw error;
+        showNotification('❌ Erro ao salvar produto!', 'error');
     }
 }
 
 // ===== ESTATÍSTICAS =====
 async function updateStatistics() {
     try {
+        if (!dbOnline) {
+            document.getElementById('totalProducts').innerText = produtos.length;
+            document.getElementById('totalSales').innerText = vendas.length;
+            document.getElementById('totalRevenue').innerText = 
+                'R$ ' + vendas.reduce((sum, v) => sum + (v.total || 0), 0).toFixed(2);
+            return;
+        }
+        
         const res = await fetch('/api/neon', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2761,8 +2759,12 @@ async function updateStatistics() {
 
     } catch (err) {
         console.error('Erro updateStatistics:', err);
+        document.getElementById('totalProducts').innerText = produtos.length;
+        document.getElementById('totalSales').innerText = vendas.length;
+        document.getElementById('totalRevenue').innerText = 
+            'R$ ' + vendas.reduce((sum, v) => sum + (v.total || 0), 0).toFixed(2);
     }
-};
+}
 
 // ===== GRÁFICOS =====
 function updateCharts() {
@@ -3147,7 +3149,7 @@ function atualizarTotalFiado() {
     document.getElementById('fiadoTotal').textContent = `R$ ${formatPrice(total)}`;
 }
 
-function salvarFiado() {
+async function salvarFiado() {
     try {
         const nomeCliente = document.getElementById('nomeCliente').value;
         const prazoPagamento = document.getElementById('prazoPagamento').value;
@@ -3205,35 +3207,87 @@ function salvarFiado() {
             pagamentos: fiadoEditando?.pagamentos || []
         };
         
-        // Atualizar estoque dos produtos
-        itens.forEach(item => {
+        // 1. ATUALIZAR ESTOQUE NO BANCO E NO FRONTEND
+        for (const item of itens) {
             const produto = produtos.find(p => p.id === item.produtoId);
             if (produto) {
+                if (dbOnline) {
+                    await neonQuery(`
+                        UPDATE produtos 
+                        SET estoque = estoque - $1
+                        WHERE id = $2
+                    `, [item.quantidade, item.produtoId]);
+                }
+                
                 produto.estoque -= item.quantidade;
             }
-        });
-        
-        if (fiadoIndex !== '') {
-            // Editar fiado existente
-            fiados[fiadoIndex] = fiadoData;
-            showNotification('✅ Fiado atualizado!', 'success');
-        } else {
-            // Novo fiado
-            fiados.unshift(fiadoData);
-            showNotification('✅ Fiado salvo!', 'success');
         }
         
-        // Fechar modal e atualizar
+        // 2. SALVAR/ATUALIZAR FIADO NO BANCO
+        if (dbOnline) {
+            try {
+                if (fiadoIndex !== '') {
+                    // Atualizar fiado existente
+                    await neonQuery(`
+                        UPDATE fiados 
+                        SET nome_cliente = $1, telefone = $2, itens = $3, total = $4, 
+                            valor_pago = $5, prazo_pagamento = $6, data_retirada = $7,
+                            observacoes = $8, status = $9, pagamentos = $10
+                        WHERE id = $11
+                    `, [
+                        fiadoData.nomeCliente, fiadoData.telefone, 
+                        JSON.stringify(fiadoData.itens), fiadoData.total,
+                        fiadoData.valorPago, fiadoData.prazoPagamento, fiadoData.dataRetirada,
+                        fiadoData.observacoes, fiadoData.status, 
+                        JSON.stringify(fiadoData.pagamentos),
+                        fiadoData.id
+                    ]);
+                } else {
+                    // Novo fiado
+                    const result = await neonQuery(`
+                        INSERT INTO fiados (nome_cliente, telefone, itens, total, valor_pago, 
+                                           prazo_pagamento, data_retirada, data_criacao, 
+                                           observacoes, status, pagamentos)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        RETURNING id
+                    `, [
+                        fiadoData.nomeCliente, fiadoData.telefone, 
+                        JSON.stringify(fiadoData.itens), fiadoData.total,
+                        fiadoData.valorPago, fiadoData.prazoPagamento, fiadoData.dataRetirada,
+                        fiadoData.dataCriacao, fiadoData.observacoes, fiadoData.status,
+                        JSON.stringify(fiadoData.pagamentos)
+                    ]);
+                    fiadoData.id = result.rows[0].id;
+                }
+            } catch (error) {
+                console.error('Erro ao salvar fiado no banco:', error);
+                showNotification('❌ Erro ao salvar fiado no banco', 'error');
+                return;
+            }
+        } else {
+            showNotification('⚠️ Sem conexão com o banco de dados', 'warning');
+            return;
+        }
+        
+        // 3. ATUALIZAR FRONTEND
+        if (fiadoIndex !== '') {
+            fiados[fiadoIndex] = fiadoData;
+        } else {
+            fiados.unshift(fiadoData);
+        }
+        
+        // 4. FECHAR MODAL E ATUALIZAR
         fecharModalFiado();
-        saveAllData();
         carregarFiados();
         calcularResumoFiados();
         loadProductsForSale();
         loadProductsList();
         
+        showNotification('✅ Fiado salvo com sucesso!', 'success');
+        
     } catch (error) {
         console.error('Erro ao salvar fiado:', error);
-        showNotification('Erro ao salvar fiado!', 'error');
+        showNotification('❌ Erro ao salvar fiado!', 'error');
     }
 }
 
@@ -3290,69 +3344,112 @@ function fecharPagamentoModal() {
     document.getElementById('pagamentoModal').classList.remove('active');
 }
 
-function confirmarPagamento() {
-    const fiadoIndex = document.getElementById('pagamentoModal').dataset.fiadoIndex;
-    if (fiadoIndex === undefined) return;
-    
-    const fiado = fiados[fiadoIndex];
-    if (!fiado) return;
-    
-    const valorPagamento = parseFloat(document.getElementById('valorPagamento').value);
-    const dataPagamento = document.getElementById('dataPagamento').value;
-    const formaPagamento = document.getElementById('formaPagamento').value;
-    const observacoes = document.getElementById('obsPagamento').value;
-    
-    if (!valorPagamento || valorPagamento <= 0) {
-        showNotification('Informe um valor válido!', 'error');
-        return;
+async function confirmarPagamento() {
+    try {
+        const fiadoIndex = document.getElementById('pagamentoModal').dataset.fiadoIndex;
+        if (fiadoIndex === undefined) return;
+        
+        const fiado = fiados[fiadoIndex];
+        if (!fiado) return;
+        
+        const valorPagamento = parseFloat(document.getElementById('valorPagamento').value);
+        const dataPagamento = document.getElementById('dataPagamento').value;
+        const formaPagamento = document.getElementById('formaPagamento').value;
+        const observacoes = document.getElementById('obsPagamento').value;
+        
+        if (!valorPagamento || valorPagamento <= 0) {
+            showNotification('Informe um valor válido!', 'error');
+            return;
+        }
+        
+        // Criar objeto de pagamento
+        const pagamento = {
+            id: Date.now(),
+            data: dataPagamento,
+            valor: valorPagamento,
+            forma: formaPagamento,
+            observacoes: observacoes
+        };
+        
+        // 1. ATUALIZAR NO BANCO
+        if (dbOnline) {
+            try {
+                // Adicionar pagamento ao array de pagamentos
+                const novosPagamentos = fiado.pagamentos ? [...fiado.pagamentos, pagamento] : [pagamento];
+                const novoValorPago = (fiado.valorPago || 0) + valorPagamento;
+                const novoStatus = novoValorPago >= fiado.total ? 'pago' : (novoValorPago > 0 ? 'parcial' : 'pendente');
+                
+                await neonQuery(`
+                    UPDATE fiados 
+                    SET valor_pago = $1, status = $2, pagamentos = $3
+                    WHERE id = $4
+                `, [novoValorPago, novoStatus, JSON.stringify(novosPagamentos), fiado.id]);
+                
+            } catch (error) {
+                console.error('Erro ao atualizar pagamento no banco:', error);
+                showNotification('❌ Erro ao registrar pagamento no banco', 'error');
+                return;
+            }
+        } else {
+            showNotification('⚠️ Sem conexão com o banco de dados', 'warning');
+            return;
+        }
+        
+        // 2. ATUALIZAR NO FRONTEND
+        if (!fiado.pagamentos) fiado.pagamentos = [];
+        fiado.pagamentos.push(pagamento);
+        fiado.valorPago = (fiado.valorPago || 0) + valorPagamento;
+        
+        // Atualizar status
+        if (fiado.valorPago >= fiado.total) {
+            fiado.status = 'pago';
+        } else if (fiado.valorPago > 0) {
+            fiado.status = 'parcial';
+        }
+        
+        // 3. ATUALIZAR LISTA
+        fiados[fiadoIndex] = fiado;
+        
+        // 4. FECHAR MODAL E ATUALIZAR
+        fecharPagamentoModal();
+        carregarFiados();
+        calcularResumoFiados();
+        
+        showNotification(`✅ Pagamento de R$ ${formatPrice(valorPagamento)} registrado!`, 'success');
+        
+    } catch (error) {
+        console.error('Erro ao confirmar pagamento:', error);
+        showNotification('❌ Erro ao registrar pagamento!', 'error');
     }
-    
-    // Criar objeto de pagamento
-    const pagamento = {
-        id: Date.now(),
-        data: dataPagamento,
-        valor: valorPagamento,
-        forma: formaPagamento,
-        observacoes: observacoes
-    };
-    
-    // Adicionar pagamento ao fiado
-    if (!fiado.pagamentos) fiado.pagamentos = [];
-    fiado.pagamentos.push(pagamento);
-    
-    // Atualizar valor pago
-    fiado.valorPago = (fiado.valorPago || 0) + valorPagamento;
-    
-    // Atualizar status
-    if (fiado.valorPago >= fiado.total) {
-        fiado.status = 'pago';
-    } else if (fiado.valorPago > 0) {
-        fiado.status = 'parcial';
-    }
-    
-    // Atualizar dados
-    fiados[fiadoIndex] = fiado;
-    
-    // Fechar modal e atualizar
-    fecharPagamentoModal();
-    saveAllData();
-    carregarFiados();
-    calcularResumoFiados();
-    
-    showNotification(`✅ Pagamento de R$ ${formatPrice(valorPagamento)} registrado!`, 'success');
 }
 
 function editarFiado(index) {
     abrirModalFiado(index);
 }
 
-function excluirFiado(index) {
-    if (confirm('Excluir este fiado?')) {
+async function excluirFiado(index) {
+    if (!confirm('Excluir este fiado?')) return;
+    
+    try {
+        const fiado = fiados[index];
+        
+        // 1. EXCLUIR DO BANCO
+        if (dbOnline && fiado.id) {
+            await neonQuery('DELETE FROM fiados WHERE id = $1', [fiado.id]);
+        }
+        
+        // 2. EXCLUIR DO FRONTEND
         fiados.splice(index, 1);
-        saveAllData();
+        
+        // 3. ATUALIZAR VIEWS
         carregarFiados();
         calcularResumoFiados();
+        
         showNotification('✅ Fiado excluído!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao excluir fiado:', error);
+        showNotification('❌ Erro ao excluir fiado!', 'error');
     }
 }
 
@@ -3673,12 +3770,6 @@ function showNotification(mensagem, tipo = 'info') {
     setTimeout(() => {
         notification.classList.remove('show');
     }, 3000);
-}
-
-function saveAllData() {
-    localStorage.setItem('chop_produtos', JSON.stringify(produtos));
-    localStorage.setItem('chop_vendas', JSON.stringify(vendas));
-    localStorage.setItem('chop_fiados', JSON.stringify(fiados));
 }
 
 // ===== FUNÇÃO DE SINCRONIZAÇÃO =====
