@@ -1,7 +1,7 @@
 {
-  "name": "chop-manager",
+  "name": "chop-manager-pro",
   "version": "1.0.0",
   "dependencies": {
-    "pg": "^8.11.3"
+    "@vercel/postgres": "^0.10.0"
   }
 }
