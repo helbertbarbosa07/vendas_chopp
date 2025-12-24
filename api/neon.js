@@ -6,7 +6,6 @@ const pool = new Pool({
 });
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -28,7 +27,7 @@ export default async function handler(req, res) {
     if (!sql) {
       return res.status(400).json({
         success: false,
-        error: 'SQL não enviada'
+        error: 'SQL não informada'
       });
     }
 
@@ -36,17 +35,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      rows: result.rows,
-      rowCount: result.rowCount
+      rows: result.rows
     });
-
-  } catch (error) {
-    console.error('Erro Neon:', error);
-
+  } catch (err) {
+    console.error('NEON ERROR:', err);
     return res.status(500).json({
       success: false,
-      error: 'Erro ao executar query',
-      detail: error.message
+      error: err.message
     });
   }
 }
