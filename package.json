@@ -1,11 +1,16 @@
 {
   "name": "chop-manager-pro",
-  "version": "2.0.0",
-  "private": true,
+  "version": "2.1.0",
+  "description": "Sistema completo de vendas de sorvete",
+  "main": "index.html",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "pg": "^8.11.5"
+    "pg": "^8.11.3"
   },
   "engines": {
     "node": "18.x"
-  }
+  },
+  "license": "MIT"
 }
