@@ -1,42 +1,66 @@
-// api/neon-simple.js
+// api/neon.js
 const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.NEON_DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { 
+    require: true,
+    rejectUnauthorized: false 
+  }
 });
 
 module.exports = async (req, res) => {
-  // CORS
+  // Configurar CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
+  // Lidar com preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  // Apenas POST permitido
+  if (req.method !== 'POST') {
+    return res.status(405).json({ 
+      success: false, 
+      error: 'Método não permitido. Use POST.' 
+    });
+  }
   
   try {
     const { sql, params = [] } = req.body;
     
-    if (!sql) {
-      return res.status(400).json({ error: 'SQL é obrigatório' });
+    if (!sql || typeof sql !== 'string') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'SQL é obrigatório e deve ser uma string' 
+      });
     }
     
-    console.log('📤 Executando SQL:', sql.substring(0, 100));
+    console.log(`📤 Executando SQL: ${sql.substring(0, 200)}...`);
     
+    // Executar query
     const result = await pool.query(sql, params);
     
-    return res.json({
+    // Retornar resultado
+    return res.status(200).json({
       success: true,
-      rows: result.rows,
-      rowCount: result.rowCount
+      rows: result.rows || [],
+      rowCount: result.rowCount || 0,
+      command: result.command || '',
+      fields: result.fields ? result.fields.map(f => f.name) : []
     });
     
   } catch (error) {
-    console.error('❌ Erro:', error);
+    console.error('❌ Erro no Neon:', error);
+    
+    // Retornar erro detalhado
     return res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      code: error.code,
+      detail: error.detail
     });
   }
 };
