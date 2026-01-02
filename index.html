@@ -1549,7 +1549,7 @@
     <div class="notification" id="notification"></div>
 <script>
 // ===== CONFIGURAÇÃO NEON =====
-const API_URL = '/api/neon';
+const API_URL = '/api/neon'; // Ajuste para sua URL se necessário
 let produtos = [];
 let vendas = [];
 let fiados = [];
@@ -1646,19 +1646,24 @@ function showNotification(mensagem, tipo = 'info') {
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('🚀 Sistema Neon carregando...');
     
+    // Configurar data/hora
     updateDateTime();
     setInterval(updateDateTime, 1000);
     
+    // Configurar navegação e eventos
     setupNavigation();
     setupEventListeners();
     initComponents();
     
+    // Testar conexão com Neon
     try {
         showNotification('🔄 Conectando ao Neon...', 'info');
         
+        // Teste simples
         const test = await neonAPI('get_produtos');
         console.log('✅ Conectado ao Neon!', test.length, 'produtos carregados');
         
+        // Carregar dados iniciais
         await loadDashboard();
         await loadProductsForSale();
         
@@ -1703,9 +1708,11 @@ function setupNavigation() {
 }
 
 function setupEventListeners() {
+    // Carrinho
     document.getElementById('clearCart')?.addEventListener('click', clearCart);
     document.getElementById('finalizeSale')?.addEventListener('click', finalizeSale);
     
+    // Produtos
     document.getElementById('addProduct')?.addEventListener('click', () => openProductModal());
     document.getElementById('productFilter')?.addEventListener('change', loadProductsList);
     document.getElementById('productSearch')?.addEventListener('input', loadProductsList);
@@ -1713,10 +1720,12 @@ function setupEventListeners() {
     document.getElementById('closeModal')?.addEventListener('click', closeProductModal);
     document.getElementById('cancelModal')?.addEventListener('click', closeProductModal);
     
+    // Botões de navegação
     document.getElementById('btnVerTodas')?.addEventListener('click', () => navigateTo('relatorios'));
     document.getElementById('btnVerTodosProdutos')?.addEventListener('click', () => navigateTo('produtos'));
     document.getElementById('btnReporEstoque')?.addEventListener('click', () => navigateTo('produtos'));
     
+    // Upload de foto
     const photoContainer = document.getElementById('photoUploadContainer');
     const photoInput = document.getElementById('productPhoto');
     
@@ -1747,6 +1756,7 @@ function setupEventListeners() {
         });
     }
     
+    // Relatórios
     document.getElementById('reportPeriod')?.addEventListener('change', function() {
         const isCustom = this.value === 'personalizado';
         document.getElementById('customDateRange').style.display = isCustom ? 'block' : 'none';
@@ -1758,6 +1768,7 @@ function setupEventListeners() {
 }
 
 function initComponents() {
+    // Inicializar emoji picker
     const emojis = ["🍦", "🍨", "🍧", "🍫", "🍓", "🍌", "🍇", "🍎", "🍉", "🍊", "🍋", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑"];
     const picker = document.getElementById('emojiPicker');
     const selector = document.getElementById('emojiSelector');
@@ -1788,6 +1799,7 @@ function initComponents() {
         });
     }
     
+    // Inicializar seleção de pagamento
     const paymentOptions = document.querySelectorAll('.payment-option input');
     paymentOptions.forEach(option => {
         option.addEventListener('change', function() {
@@ -1808,63 +1820,34 @@ async function loadDashboard() {
         showLoading('recentSalesList', 'Carregando dashboard...');
         showLoading('topProductsList', 'Carregando produtos...');
         
-        // Usar ação específica para dashboard
-        const stats = await neonAPI('get_dashboard_stats');
+        // Carregar estatísticas
+        const hoje = new Date().toISOString().split('T')[0];
+        const [vendasHoje, todosProdutos] = await Promise.all([
+            neonAPI('get_vendas_hoje'),
+            neonAPI('get_produtos')
+        ]);
         
-        // CORREÇÃO: Garantir que os valores existam
-        const faturamentoHoje = stats?.faturamentoHoje || 0;
-        const totalItens = stats?.totalItens || 0;
-        const totalVendas = stats?.totalVendas || 0;
-        const estoqueBaixo = stats?.estoqueBaixo || 0;
-        const mediaVenda = totalVendas > 0 ? faturamentoHoje / totalVendas : 0;
+        // Calcular estatísticas
+        const faturamentoHoje = vendasHoje.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0);
+        const totalItens = vendasHoje.reduce((sum, v) => sum + (parseInt(v.total_itens) || 0), 0);
+        const mediaVenda = vendasHoje.length > 0 ? faturamentoHoje / vendasHoje.length : 0;
+        const estoqueBaixo = todosProdutos.filter(p => p.estoque < 10 && p.ativo).length;
         
+        // Atualizar cards
         document.getElementById('todayRevenue').textContent = `R$ ${formatPrice(faturamentoHoje)}`;
         document.getElementById('todayChops').textContent = totalItens;
         document.getElementById('avgSale').textContent = `R$ ${formatPrice(mediaVenda)}`;
         document.getElementById('lowStock').textContent = estoqueBaixo;
         
-        // Carregar vendas recentes
+        // Carregar componentes
         await loadRecentSales();
-        
-        // Carregar produtos mais vendidos
-        await loadTopProducts(stats?.produtosMaisVendidos || []);
-        
-        // Carregar estoque baixo
+        await loadTopProducts();
         await loadLowStockProducts();
-        
-        // Atualizar gráficos
         await updateCharts();
         
     } catch (error) {
         console.error('Erro no dashboard:', error);
         showNotification('Erro ao carregar dashboard', 'error');
-        
-        // Fallback em caso de erro
-        document.getElementById('todayRevenue').textContent = 'R$ 0,00';
-        document.getElementById('todayChops').textContent = '0';
-        document.getElementById('avgSale').textContent = 'R$ 0,00';
-        document.getElementById('lowStock').textContent = '0';
-        
-        const recentSalesList = document.getElementById('recentSalesList');
-        const topProductsList = document.getElementById('topProductsList');
-        
-        if (recentSalesList) {
-            recentSalesList.innerHTML = `
-                <div class="empty-sales">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Erro ao carregar vendas</p>
-                </div>
-            `;
-        }
-        
-        if (topProductsList) {
-            topProductsList.innerHTML = `
-                <div class="empty-sales">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Erro ao carregar produtos</p>
-                </div>
-            `;
-        }
     }
 }
 
@@ -1929,54 +1912,62 @@ async function loadRecentSales() {
     }
 }
 
-async function loadTopProducts(produtosData) {
-    const topProductsList = document.getElementById('topProductsList');
-    
-    // CORREÇÃO: Verificar se produtosData é array
-    if (!Array.isArray(produtosData) || produtosData.length === 0) {
-        topProductsList.innerHTML = `
-            <div class="empty-sales">
-                <i class="fas fa-chart-line"></i>
-                <p>Sem dados de vendas hoje</p>
-            </div>
-        `;
-        return;
-    }
-    
-    // Filtrar apenas produtos com vendas
-    const produtosComVendas = produtosData.filter(p => (p.vendas_hoje || 0) > 0);
-    
-    if (produtosComVendas.length === 0) {
-        topProductsList.innerHTML = `
-            <div class="empty-sales">
-                <i class="fas fa-chart-line"></i>
-                <p>Sem dados de vendas hoje</p>
-            </div>
-        `;
-        return;
-    }
-    
-    let html = '<div class="top-products-list">';
-    
-    produtosComVendas.forEach((produto, index) => {
-        const vendasCount = produto.vendas_hoje || 0;
-        html += `
-            <div class="top-product-item">
-                <div class="top-product-emoji">${produto.emoji || '🍦'}</div>
-                <div class="top-product-info">
-                    <div class="top-product-name">${produto.nome}</div>
-                    <div class="top-product-stats">
-                        <span>${vendasCount} vendas</span>
-                        <span>R$ ${formatPrice(produto.preco * vendasCount)}</span>
-                    </div>
+async function loadTopProducts() {
+    try {
+        const todosProdutos = await neonAPI('get_produtos');
+        const topProductsList = document.getElementById('topProductsList');
+        
+        if (!todosProdutos || todosProdutos.length === 0) {
+            topProductsList.innerHTML = `
+                <div class="empty-sales">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Sem produtos cadastrados</p>
                 </div>
-                <div class="top-product-rank">${index + 1}</div>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    topProductsList.innerHTML = html;
+            `;
+            return;
+        }
+        
+        // Ordenar por vendas
+        const produtosOrdenados = [...todosProdutos]
+            .filter(p => (p.vendas || 0) > 0 && p.ativo)
+            .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
+            .slice(0, 5);
+        
+        if (produtosOrdenados.length === 0) {
+            topProductsList.innerHTML = `
+                <div class="empty-sales">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Sem dados de vendas</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="top-products-list">';
+        
+        produtosOrdenados.forEach((produto, index) => {
+            const vendasCount = produto.vendas || 0;
+            html += `
+                <div class="top-product-item">
+                    <div class="top-product-emoji">${produto.emoji || '🍦'}</div>
+                    <div class="top-product-info">
+                        <div class="top-product-name">${produto.nome}</div>
+                        <div class="top-product-stats">
+                            <span>${vendasCount} vendas</span>
+                            <span>R$ ${formatPrice(produto.preco * vendasCount)}</span>
+                        </div>
+                    </div>
+                    <div class="top-product-rank">${index + 1}</div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        topProductsList.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Erro ao carregar top produtos:', error);
+    }
 }
 
 async function loadLowStockProducts() {
@@ -1984,12 +1975,6 @@ async function loadLowStockProducts() {
         const todosProdutos = await neonAPI('get_produtos');
         const lowStockList = document.getElementById('lowStockList');
         const lowStockContainer = document.getElementById('lowStockContainer');
-        
-        // CORREÇÃO: Verificar se tem produtos
-        if (!Array.isArray(todosProdutos)) {
-            lowStockContainer.style.display = 'none';
-            return;
-        }
         
         const produtosBaixoEstoque = todosProdutos.filter(p => p.estoque < 10 && p.ativo);
         
@@ -2032,18 +2017,6 @@ async function loadProductsForSale() {
         
         produtos = await neonAPI('get_produtos');
         const productsGrid = document.getElementById('productsGrid');
-        
-        // CORREÇÃO: Verificar se produtos é array
-        if (!Array.isArray(produtos)) {
-            productsGrid.innerHTML = `
-                <div class="empty-sales" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 50px; color: var(--warning);"></i>
-                    <p style="margin-top: 10px; color: var(--gray);">Erro ao carregar produtos</p>
-                </div>
-            `;
-            return;
-        }
-        
         const produtosAtivos = produtos.filter(p => p.ativo && p.estoque > 0);
         
         if (produtosAtivos.length === 0) {
@@ -2097,7 +2070,7 @@ async function loadProductsForSale() {
     }
 }
 
-// Funções do carrinho mantidas iguais
+// Funções do carrinho
 window.addToCart = function(produtoId) {
     const produto = produtos.find(p => p.id === produtoId);
     if (!produto) {
@@ -2262,11 +2235,13 @@ async function finalizeSale() {
         const formaPagamento = document.querySelector('input[name="payment"]:checked')?.value || 'dinheiro';
         const total = carrinho.reduce((sum, item) => sum + (item.total || 0), 0);
         
+        // Se for fiado, abrir modal de fiado
         if (formaPagamento === 'fiado') {
             showNotification('Funcionalidade de fiados em desenvolvimento', 'info');
             return;
         }
         
+        // Criar objeto da venda
         const novaVenda = {
             data: new Date().toISOString().split('T')[0],
             hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -2280,8 +2255,10 @@ async function finalizeSale() {
             pagamento: formaPagamento
         };
         
+        // Salvar no Neon
         await neonAPI('create_venda', novaVenda);
         
+        // Atualizar estoque no Neon para cada item
         for (const item of carrinho) {
             await neonAPI('update_estoque', {
                 produtoId: item.produtoId,
@@ -2289,14 +2266,17 @@ async function finalizeSale() {
             });
         }
         
+        // Limpar carrinho
         carrinho = [];
         
+        // Atualizar interface
         updateCart();
         await loadDashboard();
         await loadProductsForSale();
         
         showNotification(`✅ Venda finalizada! R$ ${formatPrice(total)}`, 'success');
         
+        // Navegar para dashboard
         setTimeout(() => {
             navigateTo('dashboard');
         }, 1000);
@@ -2316,20 +2296,9 @@ async function loadProductsList() {
         const filter = document.getElementById('productFilter')?.value || 'todos';
         const search = document.getElementById('productSearch')?.value.toLowerCase() || '';
         
-        // CORREÇÃO: Verificar se produtos é array
-        if (!Array.isArray(produtos)) {
-            const productsList = document.getElementById('productsList');
-            productsList.innerHTML = `
-                <div class="empty-sales" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 50px; color: var(--warning);"></i>
-                    <p style="margin-top: 10px; color: var(--gray);">Erro ao carregar produtos</p>
-                </div>
-            `;
-            return;
-        }
-        
         let produtosFiltrados = [...produtos];
         
+        // Aplicar filtros
         if (filter === 'estoque-baixo') {
             produtosFiltrados = produtosFiltrados.filter(p => p.estoque < 10);
         } else if (filter === 'mais-vendidos') {
@@ -2518,6 +2487,7 @@ async function saveProduct() {
             showNotification('✅ Produto criado no Neon!', 'success');
         }
         
+        // Atualizar interface
         closeProductModal();
         await loadProductsList();
         await loadProductsForSale();
@@ -2536,6 +2506,7 @@ window.deleteProduct = async function(id) {
         await neonAPI('delete_produto', { id });
         showNotification('✅ Produto excluído do Neon!', 'success');
         
+        // Atualizar interface
         await loadProductsList();
         await loadProductsForSale();
         await loadDashboard();
@@ -2549,29 +2520,26 @@ window.deleteProduct = async function(id) {
 // ===== GRÁFICOS =====
 async function updateCharts() {
     try {
-        const vendasSemana = await neonAPI('get_vendas_semana');
-        const stats = await neonAPI('get_dashboard_stats');
-        
         // Gráfico de produtos mais vendidos
+        const produtosMaisVendidos = produtos
+            .filter(p => (p.vendas || 0) > 0)
+            .sort((a, b) => (b.vendas || 0) - (a.vendas || 0))
+            .slice(0, 5);
+        
         const flavorsCtx = document.getElementById('flavorsChart');
         if (flavorsCtx) {
             if (charts.flavors) charts.flavors.destroy();
             
-            // CORREÇÃO: Usar produtosMaisVendidos do dashboard stats
-            const produtosComVendas = stats?.produtosMaisVendidos || [];
-            
-            if (Array.isArray(produtosComVendas) && produtosComVendas.length > 0 && produtosComVendas.some(p => p.vendas_hoje > 0)) {
-                const produtosComDados = produtosComVendas.filter(p => p.vendas_hoje > 0);
-                
+            if (produtosMaisVendidos.length > 0) {
                 charts.flavors = new Chart(flavorsCtx, {
                     type: 'doughnut',
                     data: {
-                        labels: produtosComDados.map(p => 
-                            p.nome.substring(0, 12) + (p.nome.length > 12 ? '...' : '')
+                        labels: produtosMaisVendidos.map(p => 
+                            p.nome.substring(0, 15) + (p.nome.length > 15 ? '...' : '')
                         ),
                         datasets: [{
-                            data: produtosComDados.map(p => p.vendas_hoje),
-                            backgroundColor: produtosComDados.map(p => p.cor || '#36B5B0'),
+                            data: produtosMaisVendidos.map(p => p.vendas || 0),
+                            backgroundColor: produtosMaisVendidos.map(p => p.cor || '#36B5B0'),
                             borderWidth: 2
                         }]
                     },
@@ -2581,9 +2549,9 @@ async function updateCharts() {
                             legend: { 
                                 position: 'bottom',
                                 labels: {
-                                    padding: 15,
+                                    padding: 20,
                                     font: {
-                                        size: 9
+                                        size: 10
                                     }
                                 }
                             }
@@ -2591,12 +2559,10 @@ async function updateCharts() {
                     }
                 });
             } else {
-                // CORREÇÃO: Fallback para mensagem amigável
                 flavorsCtx.parentElement.innerHTML = `
-                    <div style="text-align: center; padding: 30px; color: var(--gray);">
+                    <div style="text-align: center; padding: 20px; color: var(--gray);">
                         <i class="fas fa-chart-pie" style="font-size: 40px; opacity: 0.3;"></i>
-                        <p>Sem vendas hoje para gráfico</p>
-                        <p style="font-size: 12px; margin-top: 5px;">Faça algumas vendas para ver o gráfico</p>
+                        <p>Sem dados de vendas para gráfico</p>
                     </div>
                 `;
             }
@@ -2605,68 +2571,47 @@ async function updateCharts() {
         // Gráfico de evolução semanal
         const weeklyCtx = document.getElementById('weeklyChart');
         if (weeklyCtx) {
+            const vendasSemana = await neonAPI('get_vendas_semana');
+            
             if (charts.weekly) charts.weekly.destroy();
             
-            // CORREÇÃO: Verificar se vendasSemana tem dados
-            if (Array.isArray(vendasSemana) && vendasSemana.length > 0) {
-                const dias = vendasSemana.map(v => {
-                    try {
-                        const data = new Date(v.data);
-                        return data.toLocaleDateString('pt-BR', { weekday: 'short' });
-                    } catch (e) {
-                        return 'Data';
-                    }
-                });
+            if (vendasSemana && vendasSemana.length > 0) {
+                const dias = vendasSemana.map(v => formatarData(v.data));
+                const totais = vendasSemana.map(v => parseFloat(v.total_dia) || 0);
                 
-                const totais = vendasSemana.map(v => {
-                    const total = parseFloat(v.total_dia);
-                    return isNaN(total) ? 0 : total;
-                });
-                
-                // Verificar se há pelo menos um valor maior que 0
-                if (totais.some(total => total > 0)) {
-                    charts.weekly = new Chart(weeklyCtx, {
-                        type: 'line',
-                        data: {
-                            labels: dias,
-                            datasets: [{
-                                label: 'Faturamento (R$)',
-                                data: totais,
-                                borderColor: '#36B5B0',
-                                backgroundColor: 'rgba(54, 181, 176, 0.1)',
-                                borderWidth: 3,
-                                tension: 0.3,
-                                fill: true
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value) {
-                                            return 'R$ ' + value;
-                                        }
+                charts.weekly = new Chart(weeklyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: dias,
+                        datasets: [{
+                            label: 'Faturamento (R$)',
+                            data: totais,
+                            borderColor: '#36B5B0',
+                            backgroundColor: 'rgba(54, 181, 176, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'R$ ' + value;
                                     }
                                 }
                             }
                         }
-                    });
-                } else {
-                    weeklyCtx.parentElement.innerHTML = `
-                        <div style="text-align: center; padding: 30px; color: var(--gray);">
-                            <i class="fas fa-chart-line" style="font-size: 40px; opacity: 0.3;"></i>
-                            <p>Sem dados de vendas na semana</p>
-                            <p style="font-size: 12px; margin-top: 5px;">Vendas aparecerão aqui após 7 dias</p>
-                        </div>
-                    `;
-                }
+                    }
+                });
             } else {
                 weeklyCtx.parentElement.innerHTML = `
-                    <div style="text-align: center; padding: 30px; color: var(--gray);">
+                    <div style="text-align: center; padding: 20px; color: var(--gray);">
                         <i class="fas fa-chart-line" style="font-size: 40px; opacity: 0.3;"></i>
-                        <p>Carregando dados semanais...</p>
+                        <p>Sem dados para gráfico semanal</p>
                     </div>
                 `;
             }
@@ -2674,29 +2619,43 @@ async function updateCharts() {
         
     } catch (error) {
         console.error('Erro ao atualizar gráficos:', error);
-        
-        // CORREÇÃO: Mostrar mensagens de erro amigáveis
-        const flavorsCtx = document.getElementById('flavorsChart');
-        const weeklyCtx = document.getElementById('weeklyChart');
-        
-        if (flavorsCtx) {
-            flavorsCtx.parentElement.innerHTML = `
-                <div style="text-align: center; padding: 30px; color: var(--warning);">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 40px;"></i>
-                    <p>Erro ao carregar gráfico</p>
-                </div>
-            `;
-        }
-        
-        if (weeklyCtx) {
-            weeklyCtx.parentElement.innerHTML = `
-                <div style="text-align: center; padding: 30px; color: var(--warning);">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 40px;"></i>
-                    <p>Erro ao carregar gráfico semanal</p>
-                </div>
-            `;
-        }
     }
+}
+
+// ===== FIADOS =====
+async function carregarFiados() {
+    try {
+        showLoading('fiadosList', 'Carregando fiados...');
+        
+        fiados = await neonAPI('get_fiados');
+        const lista = document.getElementById('fiadosList');
+        
+        if (!fiados || fiados.length === 0) {
+            lista.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--gray);">
+                    <i class="fas fa-hand-holding-usd" style="font-size: 50px; opacity: 0.3;"></i>
+                    <p style="margin-top: 10px;">Nenhum fiado registrado</p>
+                    <button class="btn-primary" onclick="abrirModalFiado()" style="margin-top: 15px;">
+                        <i class="fas fa-plus"></i> Adicionar Fiado
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        calcularResumoFiados();
+        
+    } catch (error) {
+        console.error('Erro ao carregar fiados:', error);
+        showNotification('Erro ao carregar fiados', 'error');
+    }
+}
+
+function calcularResumoFiados() {
+    // Implementação básica
+    document.getElementById('totalReceber').textContent = 'R$ 0,00';
+    document.getElementById('clientesAtraso').textContent = '0';
+    document.getElementById('fiadosAtivos').textContent = '0';
 }
 
 // ===== RELATÓRIOS =====
@@ -2704,22 +2663,19 @@ async function loadReports() {
     try {
         showLoading('reportContent', 'Gerando relatório...');
         
-        // CORREÇÃO: Usar ação específica para relatório
-        const relatorio = await neonAPI('get_relatorio_completo');
+        const [todasVendas, todosProdutos] = await Promise.all([
+            neonAPI('get_vendas_periodo', {
+                startDate: '2024-01-01',
+                endDate: new Date().toISOString().split('T')[0]
+            }),
+            neonAPI('get_produtos')
+        ]);
         
-        // CORREÇÃO: Verificar se relatório tem dados
-        if (!relatorio) {
-            throw new Error('Relatório vazio');
-        }
+        const totalVendas = todasVendas.length;
+        const totalFaturamento = todasVendas.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0);
+        const totalProdutos = todosProdutos.length;
         
         const reportContent = document.getElementById('reportContent');
-        
-        // CORREÇÃO: Garantir que valores existam
-        const totalVendas = relatorio.totalVendas || 0;
-        const totalProdutos = relatorio.totalProdutos || 0;
-        const totalFaturamento = relatorio.totalFaturamento || 0;
-        const vendasRecentes = Array.isArray(relatorio.vendasRecentes) ? relatorio.vendasRecentes : [];
-        
         reportContent.innerHTML = `
             <div>
                 <h3 style="color: var(--dark); margin-bottom: 20px; font-size: 24px;">
@@ -2735,36 +2691,25 @@ async function loadReports() {
                     </div>
                     
                     <div style="background: #f0fff4; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray);">FATURAMENTO TOTAL</div>
+                        <div style="font-size: 12px; color: var(--gray);">FATURAMENTO</div>
                         <div style="font-size: 24px; font-weight: 900; color: var(--success);">
                             R$ ${formatPrice(totalFaturamento)}
                         </div>
                     </div>
                     
                     <div style="background: #fff8e1; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray);">PRODUTOS ATIVOS</div>
+                        <div style="font-size: 12px; color: var(--gray);">PRODUTOS</div>
                         <div style="font-size: 24px; font-weight: 900; color: var(--warning);">
                             ${totalProdutos}
                         </div>
                     </div>
-                    
-                    <div style="background: #ffebee; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: var(--gray);">ÚLTIMAS VENDAS</div>
-                        <div style="font-size: 24px; font-weight: 900; color: var(--danger);">
-                            ${vendasRecentes.length}
-                        </div>
-                    </div>
                 </div>
                 
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 15px; margin-bottom: 20px;">
-                    <h4 style="color: var(--dark); margin-bottom: 15px;">Últimas Vendas</h4>
-                    ${generateSalesTable(vendasRecentes)}
-                </div>
-                
-                <div style="background: #e8f5e9; padding: 15px; border-radius: 10px;">
-                    <p style="color: var(--success);">
-                        <i class="fas fa-check-circle"></i> Banco de dados Neon conectado com sucesso!
-                    </p>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 15px;">
+                    <h4 style="color: var(--dark); margin-bottom: 15px;">Status do Sistema</h4>
+                    <p style="color: var(--gray);">✅ Conectado ao Neon PostgreSQL</p>
+                    <p style="color: var(--gray); margin-top: 5px;">✅ Dados em tempo real</p>
+                    <p style="color: var(--gray); margin-top: 5px;">✅ Backup automático</p>
                 </div>
             </div>
         `;
@@ -2772,75 +2717,7 @@ async function loadReports() {
     } catch (error) {
         console.error('Erro ao gerar relatório:', error);
         showNotification('Erro ao gerar relatório', 'error');
-        
-        // CORREÇÃO: Mensagem de erro mais amigável
-        document.getElementById('reportContent').innerHTML = `
-            <div style="text-align: center; padding: 40px; color: var(--gray);">
-                <i class="fas fa-exclamation-triangle" style="font-size: 50px; color: var(--warning);"></i>
-                <p style="margin-top: 10px;">Erro ao carregar relatório</p>
-                <p style="font-size: 14px; margin-top: 5px; color: var(--gray);">
-                    Verifique sua conexão com o banco de dados
-                </p>
-                <button class="btn-primary" onclick="loadReports()" style="margin-top: 15px;">
-                    <i class="fas fa-redo"></i> Tentar Novamente
-                </button>
-            </div>
-        `;
     }
-}
-
-// Função auxiliar para tabela de vendas
-function generateSalesTable(vendasList) {
-    // CORREÇÃO: Verificar se vendasList é array
-    if (!Array.isArray(vendasList) || vendasList.length === 0) {
-        return `
-            <div style="text-align: center; padding: 30px; color: var(--gray);">
-                <i class="fas fa-receipt" style="font-size: 40px; opacity: 0.3;"></i>
-                <p>Nenhuma venda registrada ainda</p>
-            </div>
-        `;
-    }
-    
-    let html = `
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-                <tr style="background: #f8f9fa;">
-                    <th style="padding: 10px; text-align: left;">Data</th>
-                    <th style="padding: 10px; text-align: left;">Hora</th>
-                    <th style="padding: 10px; text-align: left;">Itens</th>
-                    <th style="padding: 10px; text-align: left;">Total</th>
-                    <th style="padding: 10px; text-align: left;">Pagamento</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    vendasList.forEach(venda => {
-        const dataFormatada = formatarData(venda.data);
-        const pagamentoClass = {
-            'dinheiro': 'payment-dinheiro',
-            'cartao': 'payment-cartao',
-            'pix': 'payment-pix',
-            'fiado': 'payment-pix'
-        }[venda.pagamento] || '';
-        
-        html += `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 10px;">${dataFormatada}</td>
-                <td style="padding: 10px;">${venda.hora || '--:--'}</td>
-                <td style="padding: 10px;">${venda.total_itens || 0} itens</td>
-                <td style="padding: 10px; font-weight: 700;">R$ ${formatPrice(venda.total)}</td>
-                <td style="padding: 10px;">
-                    <span style="padding: 2px 8px; border-radius: 10px; background: #e3f2fd; color: #1565c0; font-size: 12px;">
-                        ${(venda.pagamento || 'N/A').toUpperCase()}
-                    </span>
-                </td>
-            </tr>
-        `;
-    });
-    
-    html += '</tbody></table>';
-    return html;
 }
 
 function printReport() {
@@ -2876,22 +2753,22 @@ function printReport() {
 // ===== CONFIGURAÇÕES =====
 async function loadConfig() {
     try {
-        const relatorio = await neonAPI('get_relatorio_completo');
+        const [totalProdutos, totalVendas] = await Promise.all([
+            neonAPI('get_produtos'),
+            neonAPI('get_vendas_periodo', {
+                startDate: '2024-01-01',
+                endDate: new Date().toISOString().split('T')[0]
+            })
+        ]);
         
-        // CORREÇÃO: Valores padrão caso erro
-        const totalProdutos = relatorio?.totalProdutos || 0;
-        const totalVendas = relatorio?.totalVendas || 0;
-        const totalFaturamento = relatorio?.totalFaturamento || 0;
+        const totalFaturamento = totalVendas.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0);
         
-        document.getElementById('totalProducts').innerText = totalProdutos;
-        document.getElementById('totalSales').innerText = totalVendas;
+        document.getElementById('totalProducts').innerText = totalProdutos.length;
+        document.getElementById('totalSales').innerText = totalVendas.length;
         document.getElementById('totalRevenue').innerText = `R$ ${formatPrice(totalFaturamento)}`;
         
     } catch (error) {
         console.error('Erro ao carregar configurações:', error);
-        document.getElementById('totalProducts').innerText = '0';
-        document.getElementById('totalSales').innerText = '0';
-        document.getElementById('totalRevenue').innerText = 'R$ 0,00';
     }
 }
 
@@ -2911,9 +2788,9 @@ async function backupData() {
             produtos: produtosData,
             vendas: vendasData,
             timestamp: new Date().toISOString(),
-            totalProdutos: Array.isArray(produtosData) ? produtosData.length : 0,
-            totalVendas: Array.isArray(vendasData) ? vendasData.length : 0,
-            totalFaturamento: Array.isArray(vendasData) ? vendasData.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0) : 0
+            totalProdutos: produtosData.length,
+            totalVendas: vendasData.length,
+            totalFaturamento: vendasData.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0)
         };
         
         const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -2934,42 +2811,6 @@ async function backupData() {
     }
 }
 
-// ===== FIADOS (simplificado) =====
-async function carregarFiados() {
-    try {
-        showLoading('fiadosList', 'Carregando fiados...');
-        
-        fiados = await neonAPI('get_fiados');
-        const lista = document.getElementById('fiadosList');
-        
-        if (!Array.isArray(fiados) || fiados.length === 0) {
-            lista.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: var(--gray);">
-                    <i class="fas fa-hand-holding-usd" style="font-size: 50px; opacity: 0.3;"></i>
-                    <p style="margin-top: 10px;">Nenhum fiado registrado</p>
-                    <button class="btn-primary" onclick="abrirModalFiado()" style="margin-top: 15px;">
-                        <i class="fas fa-plus"></i> Adicionar Fiado
-                    </button>
-                </div>
-            `;
-            return;
-        }
-        
-        calcularResumoFiados();
-        
-    } catch (error) {
-        console.error('Erro ao carregar fiados:', error);
-        showNotification('Erro ao carregar fiados', 'error');
-    }
-}
-
-function calcularResumoFiados() {
-    // Implementação básica
-    document.getElementById('totalReceber').textContent = 'R$ 0,00';
-    document.getElementById('clientesAtraso').textContent = '0';
-    document.getElementById('fiadosAtivos').textContent = '0';
-}
-
 // ===== FUNÇÕES GLOBAIS =====
 window.navigateTo = function(pageId) {
     const tab = document.querySelector(`.nav-tab[data-page="${pageId}"]`);
@@ -2982,6 +2823,7 @@ window.syncData = async function() {
     try {
         showNotification('🔄 Sincronizando com Neon...', 'info');
         
+        // Recarregar todos os dados
         await loadDashboard();
         await loadProductsForSale();
         await loadProductsList();
@@ -2992,9 +2834,10 @@ window.syncData = async function() {
         console.error('Erro na sincronização:', error);
         showNotification('❌ Erro na sincronização', 'error');
     }
+
 };
 
-// Funções básicas para modais de fiados
+// Funções básicas para modais de fiados (simplificadas)
 function abrirModalFiado() {
     showNotification('Funcionalidade de fiados em desenvolvimento', 'info');
 }
@@ -3006,6 +2849,5 @@ function abrirModalFiadoParaVenda() {
 function exportarFiados() {
     showNotification('Funcionalidade de fiados em desenvolvimento', 'info');
 }
-</script>
-</body>
+</script></body>
 </html>
