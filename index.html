@@ -1597,7 +1597,181 @@ function formatarData(dataString) {
         return dataString || '--/--/----';
     }
 }
+//aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+// ===== CÓDIGO DE EMERGÊNCIA PARA RESTAURAR DASHBOARD =====
+function emergencyRestoreDashboard() {
+    console.log('🚨 EMERGENCY: Restaurando dashboard...');
+    
+    // 1. Garantir que as variáveis existam
+    if (!window.produtos) window.produtos = [];
+    if (!window.vendas) window.vendas = [];
+    if (!window.fiados) window.fiados = [];
+    if (!window.carrinho) window.carrinho = [];
+    if (!window.charts) window.charts = {};
+    
+    // 2. Tentar carregar do localStorage
+    try {
+        const produtosLS = localStorage.getItem('chop_produtos');
+        const vendasLS = localStorage.getItem('chop_vendas');
+        const fiadosLS = localStorage.getItem('chop_fiados');
+        
+        if (produtosLS) window.produtos = JSON.parse(produtosLS);
+        if (vendasLS) window.vendas = JSON.parse(vendasLS);
+        if (fiadosLS) window.fiados = JSON.parse(fiadosLS);
+        
+        console.log('📥 Dados carregados do localStorage:');
+        console.log('- Produtos:', window.produtos.length);
+        console.log('- Vendas:', window.vendas.length);
+        console.log('- Fiados:', window.fiados.length);
+    } catch (e) {
+        console.error('Erro ao carregar do localStorage:', e);
+    }
+    
+    // 3. Se ainda vazios, criar dados de teste
+    if (window.produtos.length === 0) {
+        console.log('⚠️ Criando dados de teste...');
+        window.produtos = [
+            {
+                id: 1,
+                nome: 'Casquinha Simples',
+                descricao: 'Casquinha tradicional',
+                preco: 5.00,
+                estoque: 50,
+                emoji: '🍦',
+                cor: '#FFD700',
+                ativo: true,
+                vendas: 15,
+                foto: null
+            },
+            {
+                id: 2,
+                nome: 'Milk Shake',
+                descricao: 'Milk shake cremoso',
+                preco: 12.00,
+                estoque: 30,
+                emoji: '🥤',
+                cor: '#8B4513',
+                ativo: true,
+                vendas: 8,
+                foto: null
+            }
+        ];
+    }
+    
+    if (window.vendas.length === 0) {
+        const hoje = new Date().toISOString().split('T')[0];
+        window.vendas = [
+            {
+                id: 1,
+                data: hoje,
+                hora: '10:30',
+                total: 25.50,
+                pagamento: 'dinheiro',
+                itens: [
+                    { produtoId: 1, nome: 'Casquinha Simples', quantidade: 2, preco: 5.00 },
+                    { produtoId: 2, nome: 'Milk Shake', quantidade: 1, preco: 12.00 }
+                ]
+            },
+            {
+                id: 2,
+                data: hoje,
+                hora: '14:45',
+                total: 17.00,
+                pagamento: 'cartao',
+                itens: [
+                    { produtoId: 1, nome: 'Casquinha Simples', quantidade: 1, preco: 5.00 },
+                    { produtoId: 2, nome: 'Milk Shake', quantidade: 1, preco: 12.00 }
+                ]
+            }
+        ];
+    }
+    
+    // 4. Salvar dados
+    saveAllData();
+    
+    // 5. Forçar recarregamento do dashboard
+    setTimeout(() => {
+        console.log('🔄 Forçando recarregamento do dashboard...');
+        loadDashboard();
+        
+        // Atualizar outras páginas também
+        loadProductsForSale();
+        loadProductsList();
+        carregarFiados();
+        
+        showNotification('✅ Dashboard restaurado com sucesso!', 'success');
+    }, 500);
+}
 
+// Adicione um botão de emergência no HTML temporariamente
+function addEmergencyButton() {
+    // Remover botão anterior se existir
+    const oldBtn = document.getElementById('emergencyBtn');
+    if (oldBtn) oldBtn.remove();
+    
+    // Criar novo botão
+    const emergencyBtn = document.createElement('button');
+    emergencyBtn.id = 'emergencyBtn';
+    emergencyBtn.innerHTML = '🚨 RESTAURAR DASHBOARD';
+    emergencyBtn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #FF0000, #FF4500);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 20px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 9999;
+        box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
+        font-size: 14px;
+    `;
+    
+    emergencyBtn.onclick = emergencyRestoreDashboard;
+    document.body.appendChild(emergencyBtn);
+    
+    console.log('🆘 Botão de emergência adicionado!');
+}
+
+// Executar quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Iniciando sistema com verificação de emergência...');
+    
+    // Adicionar botão de emergência
+    addEmergencyButton();
+    
+    // Verificar se o dashboard está funcionando
+    setTimeout(() => {
+        const dashboardElements = [
+            'todayRevenue',
+            'todayChops',
+            'avgSale',
+            'lowStock',
+            'recentSalesList'
+        ];
+        
+        let hasEmptyElements = false;
+        dashboardElements.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && (el.textContent === '0' || el.textContent === 'R$ 0,00' || el.innerHTML.includes('Carregando'))) {
+                console.warn(`⚠️ Elemento ${id} está vazio ou com valor padrão`);
+                hasEmptyElements = true;
+            }
+        });
+        
+        if (hasEmptyElements) {
+            console.warn('⚠️ Dashboard pode não estar carregando corretamente');
+            showNotification('Dashboard pode estar com problemas. Clique no botão 🚨 para restaurar.', 'warning');
+        }
+    }, 2000);
+});
+
+    
+    //aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+    
 // ===== LISTA DE EMOJIS =====
 const emojis = [
     "🍦", "🍨", "🍧", "🍫", "🍓", "🍌", "🍇", "🍎", "🍉", "🍊",
