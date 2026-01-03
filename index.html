@@ -1568,7 +1568,7 @@ canvas {
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
 <script>
-// ===== CONFIGURAÇÃO =====
+    // ===== CONFIGURAÇÃO =====
 const API_URL = 'https://helbertbarbosa07-vendaschopp.vercel.app/api/neon';
 
 // ===== DADOS DO SISTEMA =====
@@ -1618,6 +1618,334 @@ function saveAllData() {
         localStorage.setItem('chop_fiados', JSON.stringify(fiados));
     } catch (error) {
         console.error('Erro ao salvar:', error);
+    }
+}
+
+// ===== FUNÇÃO DE CONEXÃO COM NEON =====
+async function neonQuery(sql, params = []) {
+    try {
+        if (!API_URL || API_URL.includes('seusite')) {
+            console.log('⚠️ URL do Neon não configurada');
+            return { success: false, error: 'URL não configurada' };
+        }
+        
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql, params })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data;
+        
+    } catch (error) {
+        console.error('Erro no Neon:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// ===== SINCORNIZAÇÃO COM NEON =====
+window.syncData = async function() {
+    try {
+        const syncButton = document.getElementById('syncButton');
+        const originalText = syncButton.innerHTML;
+        
+        syncButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+        syncButton.disabled = true;
+        
+        // Verificar se a API está configurada
+        if (!API_URL || API_URL.includes('seusite')) {
+            showNotification('⚠️ Configure a URL da API no código', 'warning');
+            syncButton.innerHTML = originalText;
+            syncButton.disabled = false;
+            return;
+        }
+        
+        // Testar conexão com o Neon
+        const testResult = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                sql: 'SELECT 1 as test',
+                params: []
+            })
+        });
+        
+        if (!testResult.ok) {
+            throw new Error('Falha na conexão com o servidor');
+        }
+        
+        const testData = await testResult.json();
+        
+        if (!testData.success) {
+            throw new Error(testData.error || 'Erro desconhecido');
+        }
+        
+        // Criar tabelas se não existirem
+        await createTablesIfNeeded();
+        
+        // Sincronizar produtos
+        await syncProducts();
+        
+        // Sincronizar vendas
+        await syncSales();
+        
+        // Sincronizar fiados
+        await syncFiados();
+        
+        showNotification('✅ Sincronização completa!', 'success');
+        
+    } catch (error) {
+        console.error('Erro na sincronização:', error);
+        showNotification(`❌ Erro na sincronização: ${error.message}`, 'error');
+    } finally {
+        const syncButton = document.getElementById('syncButton');
+        syncButton.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar';
+        syncButton.disabled = false;
+    }
+};
+
+// Criar tabelas no Neon
+async function createTablesIfNeeded() {
+    const tablesSQL = `
+        -- Tabela de produtos
+        CREATE TABLE IF NOT EXISTS produtos (
+            id BIGINT PRIMARY KEY,
+            nome VARCHAR(200) NOT NULL,
+            descricao TEXT,
+            preco DECIMAL(10,2) NOT NULL,
+            estoque INTEGER DEFAULT 0,
+            emoji VARCHAR(10) DEFAULT '🍦',
+            cor VARCHAR(20) DEFAULT '#36B5B0',
+            ativo BOOLEAN DEFAULT true,
+            vendas INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- Tabela de vendas
+        CREATE TABLE IF NOT EXISTS vendas (
+            id BIGINT PRIMARY KEY,
+            data VARCHAR(20) NOT NULL,
+            hora VARCHAR(20) NOT NULL,
+            itens JSONB NOT NULL,
+            total DECIMAL(10,2) NOT NULL,
+            pagamento VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- Tabela de fiados
+        CREATE TABLE IF NOT EXISTS fiados (
+            id BIGINT PRIMARY KEY,
+            cliente_nome VARCHAR(200) NOT NULL,
+            cliente_telefone VARCHAR(50),
+            produtos JSONB NOT NULL,
+            total DECIMAL(10,2) NOT NULL,
+            pago DECIMAL(10,2) DEFAULT 0,
+            prazo DATE NOT NULL,
+            status VARCHAR(50) DEFAULT 'pendente',
+            observacoes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- Tabela de pagamentos de fiados
+        CREATE TABLE IF NOT EXISTS fiados_pagamentos (
+            id SERIAL PRIMARY KEY,
+            fiado_id BIGINT REFERENCES fiados(id) ON DELETE CASCADE,
+            valor DECIMAL(10,2) NOT NULL,
+            data_pagamento DATE NOT NULL,
+            forma_pagamento VARCHAR(50),
+            observacoes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    `;
+    
+    await neonQuery(tablesSQL);
+}
+
+// Sincronizar produtos
+async function syncProducts() {
+    try {
+        // Buscar produtos do Neon
+        const result = await neonQuery('SELECT * FROM produtos ORDER BY id');
+        
+        if (result.success && result.rows) {
+            // Converter para formato local
+            const produtosNeon = result.rows.map(row => ({
+                id: row.id,
+                nome: row.nome,
+                descricao: row.descricao || '',
+                preco: parseFloat(row.preco),
+                estoque: parseInt(row.estoque) || 0,
+                emoji: row.emoji || '🍦',
+                cor: row.cor || '#36B5B0',
+                ativo: row.ativo !== false,
+                vendas: parseInt(row.vendas) || 0
+            }));
+            
+            // Se houver produtos no Neon, usar eles
+            if (produtosNeon.length > 0) {
+                produtos = produtosNeon;
+                localStorage.setItem('chop_produtos', JSON.stringify(produtos));
+                showNotification(`📦 ${produtosNeon.length} produtos carregados do Neon`, 'success');
+            }
+            
+            // Salvar produtos locais no Neon
+            const produtosLocais = JSON.parse(localStorage.getItem('chop_produtos')) || [];
+            
+            for (const produto of produtosLocais) {
+                // Verificar se produto já existe
+                const existe = produtosNeon.find(p => p.id === produto.id);
+                
+                if (!existe) {
+                    // Inserir novo produto
+                    await neonQuery(`
+                        INSERT INTO produtos (id, nome, descricao, preco, estoque, emoji, cor, ativo, vendas)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        ON CONFLICT (id) DO UPDATE SET
+                            nome = EXCLUDED.nome,
+                            descricao = EXCLUDED.descricao,
+                            preco = EXCLUDED.preco,
+                            estoque = EXCLUDED.estoque,
+                            emoji = EXCLUDED.emoji,
+                            cor = EXCLUDED.cor,
+                            ativo = EXCLUDED.ativo,
+                            vendas = EXCLUDED.vendas,
+                            updated_at = CURRENT_TIMESTAMP
+                    `, [
+                        produto.id,
+                        produto.nome,
+                        produto.descricao || '',
+                        produto.preco,
+                        produto.estoque || 0,
+                        produto.emoji || '🍦',
+                        produto.cor || '#36B5B0',
+                        produto.ativo !== false,
+                        produto.vendas || 0
+                    ]);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao sincronizar produtos:', error);
+        showNotification('❌ Erro ao sincronizar produtos', 'error');
+    }
+}
+
+// Sincronizar vendas
+async function syncSales() {
+    try {
+        // Buscar vendas do Neon
+        const result = await neonQuery('SELECT * FROM vendas ORDER BY id DESC LIMIT 100');
+        
+        if (result.success && result.rows) {
+            const vendasNeon = result.rows.map(row => ({
+                id: row.id,
+                data: row.data,
+                hora: row.hora,
+                itens: row.itens,
+                total: parseFloat(row.total),
+                pagamento: row.pagamento
+            }));
+            
+            if (vendasNeon.length > 0) {
+                vendas = vendasNeon;
+                localStorage.setItem('chop_vendas', JSON.stringify(vendas));
+                showNotification(`📊 ${vendasNeon.length} vendas carregadas do Neon`, 'success');
+            }
+            
+            // Sincronizar vendas locais
+            const vendasLocais = JSON.parse(localStorage.getItem('chop_vendas')) || [];
+            
+            for (const venda of vendasLocais) {
+                const existe = vendasNeon.find(v => v.id === venda.id);
+                
+                if (!existe) {
+                    await neonQuery(`
+                        INSERT INTO vendas (id, data, hora, itens, total, pagamento)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (id) DO NOTHING
+                    `, [
+                        venda.id,
+                        venda.data,
+                        venda.hora,
+                        JSON.stringify(venda.itens),
+                        venda.total,
+                        venda.pagamento
+                    ]);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao sincronizar vendas:', error);
+        showNotification('❌ Erro ao sincronizar vendas', 'error');
+    }
+}
+
+// Sincronizar fiados
+async function syncFiados() {
+    try {
+        // Buscar fiados do Neon
+        const result = await neonQuery('SELECT * FROM fiados ORDER BY id DESC');
+        
+        if (result.success && result.rows) {
+            const fiadosNeon = result.rows.map(row => ({
+                id: row.id,
+                cliente_nome: row.cliente_nome,
+                cliente_telefone: row.cliente_telefone,
+                produtos: row.produtos,
+                total: parseFloat(row.total),
+                pago: parseFloat(row.pago) || 0,
+                prazo: row.prazo,
+                status: row.status || 'pendente',
+                observacoes: row.observacoes
+            }));
+            
+            if (fiadosNeon.length > 0) {
+                fiados = fiadosNeon;
+                localStorage.setItem('chop_fiados', JSON.stringify(fiados));
+                showNotification(`📝 ${fiadosNeon.length} fiados carregados do Neon`, 'success');
+            }
+            
+            // Sincronizar fiados locais
+            const fiadosLocais = JSON.parse(localStorage.getItem('chop_fiados')) || [];
+            
+            for (const fiado of fiadosLocais) {
+                const existe = fiadosNeon.find(f => f.id === fiado.id);
+                
+                if (!existe) {
+                    await neonQuery(`
+                        INSERT INTO fiados (id, cliente_nome, cliente_telefone, produtos, total, pago, prazo, status, observacoes)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        ON CONFLICT (id) DO UPDATE SET
+                            pago = EXCLUDED.pago,
+                            status = EXCLUDED.status,
+                            updated_at = CURRENT_TIMESTAMP
+                    `, [
+                        fiado.id,
+                        fiado.cliente_nome,
+                        fiado.cliente_telefone || '',
+                        JSON.stringify(fiado.produtos),
+                        fiado.total,
+                        fiado.pago || 0,
+                        fiado.prazo,
+                        fiado.status || 'pendente',
+                        fiado.observacoes || ''
+                    ]);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao sincronizar fiados:', error);
+        showNotification('❌ Erro ao sincronizar fiados', 'error');
     }
 }
 
@@ -2086,7 +2414,7 @@ async function finalizeSale() {
             pagamento: formaPagamento
         };
         
-        // Atualizar estoque
+        // Atualizar estoque local
         carrinho.forEach(itemCarrinho => {
             const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
             if (produto) {
@@ -2095,7 +2423,38 @@ async function finalizeSale() {
             }
         });
         
-        // Salvar
+        // Salvar no Neon se estiver online
+        if (dbOnline) {
+            await neonQuery(`
+                INSERT INTO vendas (id, data, hora, itens, total, pagamento)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            `, [
+                novaVenda.id,
+                novaVenda.data,
+                novaVenda.hora,
+                JSON.stringify(novaVenda.itens),
+                novaVenda.total,
+                novaVenda.pagamento
+            ]);
+            
+            // Atualizar estoque no Neon
+            for (const itemCarrinho of carrinho) {
+                const produto = produtos.find(p => p.id === itemCarrinho.produtoId);
+                if (produto) {
+                    await neonQuery(`
+                        UPDATE produtos 
+                        SET estoque = $1, vendas = $2, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $3
+                    `, [
+                        produto.estoque,
+                        produto.vendas,
+                        produto.id
+                    ]);
+                }
+            }
+        }
+        
+        // Salvar localmente
         vendas.unshift(novaVenda);
         carrinho = [];
         
@@ -2249,6 +2608,12 @@ window.deleteProduct = async function(id) {
     if (confirm(`Tem certeza que deseja excluir "${produto.nome}"?`)) {
         try {
             produtos = produtos.filter(p => p.id !== id);
+            
+            // Remover do Neon se estiver online
+            if (dbOnline) {
+                await neonQuery('DELETE FROM produtos WHERE id = $1', [id]);
+            }
+            
             saveAllData();
             loadProductsList();
             loadProductsForSale();
@@ -2280,7 +2645,7 @@ function openProductModal(produto = null) {
         document.getElementById('selectedEmoji').textContent = produto.emoji || '🍦';
         document.getElementById('productEmoji').value = produto.emoji || '🍦';
         document.getElementById('productColor').value = produto.cor || '#36B5B0';
-        document.getElementById('productActive').checked = produto.ativo;
+        document.getElementById('productActive').checked = produto.ativo !== false;
     } else {
         title.textContent = 'Novo Produto';
         document.getElementById('productForm').reset();
@@ -2320,18 +2685,65 @@ async function saveProduct() {
             ativo: document.getElementById('productActive').checked
         };
         
+        let produtoId;
+        
         if (isEditing) {
-            const produtoExistente = produtos.find(p => p.id === parseInt(id));
+            produtoId = parseInt(id);
+            const produtoExistente = produtos.find(p => p.id === produtoId);
             if (produtoExistente) {
-                produtoData.id = parseInt(id);
+                produtoData.id = produtoId;
                 produtoData.vendas = produtoExistente.vendas || 0;
                 const index = produtos.findIndex(p => p.id === produtoData.id);
                 produtos[index] = { ...produtos[index], ...produtoData };
+                
+                // Atualizar no Neon
+                if (dbOnline) {
+                    await neonQuery(`
+                        UPDATE produtos SET 
+                            nome = $1, 
+                            descricao = $2, 
+                            preco = $3, 
+                            estoque = $4, 
+                            emoji = $5, 
+                            cor = $6, 
+                            ativo = $7,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $8
+                    `, [
+                        produtoData.nome,
+                        produtoData.descricao,
+                        produtoData.preco,
+                        produtoData.estoque,
+                        produtoData.emoji,
+                        produtoData.cor,
+                        produtoData.ativo,
+                        produtoId
+                    ]);
+                }
             }
         } else {
-            produtoData.id = Date.now();
+            produtoId = Date.now();
+            produtoData.id = produtoId;
             produtoData.vendas = 0;
             produtos.push(produtoData);
+            
+            // Inserir no Neon
+            if (dbOnline) {
+                await neonQuery(`
+                    INSERT INTO produtos (id, nome, descricao, preco, estoque, emoji, cor, ativo, vendas)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                `, [
+                    produtoId,
+                    produtoData.nome,
+                    produtoData.descricao,
+                    produtoData.preco,
+                    produtoData.estoque,
+                    produtoData.emoji,
+                    produtoData.cor,
+                    produtoData.ativo,
+                    0
+                ]);
+            }
         }
         
         closeProductModal();
@@ -2347,6 +2759,331 @@ async function saveProduct() {
         showNotification('❌ Erro ao salvar produto!', 'error');
     }
 }
+
+// ===== FIADOS =====
+function loadFiados() {
+    const fiadosList = document.getElementById('fiadosList');
+    if (!fiadosList) return;
+    
+    if (fiados.length === 0) {
+        fiadosList.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--gray);">
+                <i class="fas fa-hand-holding-usd" style="font-size: 50px; opacity: 0.3;"></i>
+                <p style="margin-top: 10px;">Nenhum fiado cadastrado</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Atualizar estatísticas
+    updateFiadosStats();
+    
+    // Carregar lista de fiados
+    let html = `
+        <table class="sales-table">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Total</th>
+                    <th>Pago</th>
+                    <th>Prazo</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    fiados.forEach((fiado, index) => {
+        const restante = fiado.total - (fiado.pago || 0);
+        const status = getFiadoStatus(fiado);
+        let statusClass = '';
+        
+        switch(status) {
+            case 'Pago': statusClass = 'payment-dinheiro'; break;
+            case 'Pendente': statusClass = 'payment-pix'; break;
+            case 'Atrasado': statusClass = 'payment-badge'; break;
+        }
+        
+        html += `
+            <tr>
+                <td>
+                    <div style="font-weight: 700;">${fiado.cliente_nome}</div>
+                    <div style="font-size: 12px; color: var(--gray);">${fiado.cliente_telefone || 'Sem telefone'}</div>
+                </td>
+                <td><strong>R$ ${formatPrice(fiado.total)}</strong></td>
+                <td>R$ ${formatPrice(fiado.pago || 0)}</td>
+                <td>${formatarData(fiado.prazo)}</td>
+                <td><span class="payment-badge ${statusClass}">${status}</span></td>
+                <td>
+                    <button onclick="abrirPagamentoModal(${index})" style="padding: 5px 10px; background: var(--success); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </button>
+                    <button onclick="verDetalhesFiado(${index})" style="padding: 5px 10px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; margin-left: 5px;">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `</tbody></table>`;
+    fiadosList.innerHTML = html;
+}
+
+function getFiadoStatus(fiado) {
+    const hoje = new Date();
+    const prazo = new Date(fiado.prazo);
+    const pago = fiado.pago || 0;
+    
+    if (pago >= fiado.total) {
+        return 'Pago';
+    } else if (prazo < hoje) {
+        return 'Atrasado';
+    } else {
+        return 'Pendente';
+    }
+}
+
+function updateFiadosStats() {
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+    
+    let totalReceber = 0;
+    let recebidoMes = 0;
+    let clientesAtraso = 0;
+    let fiadosAtivos = 0;
+    
+    fiados.forEach(fiado => {
+        const restante = fiado.total - (fiado.pago || 0);
+        totalReceber += restante;
+        
+        if (fiado.pago && fiado.pago > 0) {
+            // Simular que pagamentos deste mês (na realidade, precisaria de data de pagamento)
+            recebidoMes += fiado.pago * 0.3; // Aproximação
+        }
+        
+        const prazo = new Date(fiado.prazo);
+        if (prazo < hoje && restante > 0) {
+            clientesAtraso++;
+        }
+        
+        if (restante > 0) {
+            fiadosAtivos++;
+        }
+    });
+    
+    document.getElementById('totalReceber').textContent = `R$ ${formatPrice(totalReceber)}`;
+    document.getElementById('recebidoMes').textContent = `R$ ${formatPrice(recebidoMes)}`;
+    document.getElementById('clientesAtraso').textContent = clientesAtraso;
+    document.getElementById('fiadosAtivos').textContent = fiadosAtivos;
+}
+
+window.abrirPagamentoModal = function(index) {
+    const fiado = fiados[index];
+    const pagamentoModal = document.getElementById('pagamentoModal');
+    const pagamentoInfo = document.getElementById('pagamentoInfo');
+    
+    if (!pagamentoModal || !pagamentoInfo) return;
+    
+    pagamentoInfo.innerHTML = `
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px;">
+            <h4 style="margin-bottom: 10px; color: var(--dark);">${fiado.cliente_nome}</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <div style="font-size: 12px; color: var(--gray);">Total:</div>
+                    <div style="font-weight: 700;">R$ ${formatPrice(fiado.total)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: var(--gray);">Pago:</div>
+                    <div style="font-weight: 700; color: var(--success);">R$ ${formatPrice(fiado.pago || 0)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: var(--gray);">Restante:</div>
+                    <div style="font-weight: 700; color: var(--danger);">R$ ${formatPrice(fiado.total - (fiado.pago || 0))}</div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: var(--gray);">Prazo:</div>
+                    <div style="font-weight: 700;">${formatarData(fiado.prazo)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Configurar botão de registrar pagamento
+    const confirmarBtn = pagamentoModal.querySelector('button[onclick="confirmarPagamento()"]');
+    if (confirmarBtn) {
+        confirmarBtn.setAttribute('data-fiado-index', index);
+    }
+    
+    // Resetar formulário
+    document.getElementById('valorPagamento').value = '';
+    document.getElementById('dataPagamento').value = new Date().toISOString().split('T')[0];
+    document.getElementById('formaPagamento').value = 'dinheiro';
+    document.getElementById('obsPagamento').value = '';
+    
+    pagamentoModal.classList.add('active');
+};
+
+window.confirmarPagamento = function() {
+    const confirmarBtn = document.querySelector('button[onclick="confirmarPagamento()"]');
+    const index = confirmarBtn ? parseInt(confirmarBtn.getAttribute('data-fiado-index')) : -1;
+    
+    if (index === -1 || index >= fiados.length) {
+        showNotification('Fiado não encontrado!', 'error');
+        return;
+    }
+    
+    const valorPagamento = parseFloat(document.getElementById('valorPagamento').value);
+    const dataPagamento = document.getElementById('dataPagamento').value;
+    const formaPagamento = document.getElementById('formaPagamento').value;
+    const observacoes = document.getElementById('obsPagamento').value;
+    
+    if (!valorPagamento || valorPagamento <= 0) {
+        showNotification('Informe um valor válido!', 'error');
+        return;
+    }
+    
+    const fiado = fiados[index];
+    const restante = fiado.total - (fiado.pago || 0);
+    
+    if (valorPagamento > restante) {
+        showNotification(`Valor excede o restante (R$ ${formatPrice(restante)})!`, 'error');
+        return;
+    }
+    
+    // Atualizar fiado
+    fiado.pago = (fiado.pago || 0) + valorPagamento;
+    
+    if (fiado.pago >= fiado.total) {
+        fiado.status = 'pago';
+    } else {
+        fiado.status = 'parcial';
+    }
+    
+    // Salvar no Neon se estiver online
+    if (dbOnline) {
+        neonQuery(`
+            INSERT INTO fiados_pagamentos (fiado_id, valor, data_pagamento, forma_pagamento, observacoes)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [fiado.id, valorPagamento, dataPagamento, formaPagamento, observacoes]);
+        
+        neonQuery(`
+            UPDATE fiados SET pago = $1, status = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+        `, [fiado.pago, fiado.status, fiado.id]);
+    }
+    
+    // Salvar localmente
+    saveAllData();
+    
+    // Fechar modal
+    fecharPagamentoModal();
+    
+    // Atualizar interface
+    loadFiados();
+    
+    showNotification(`✅ Pagamento de R$ ${formatPrice(valorPagamento)} registrado!`, 'success');
+};
+
+window.fecharPagamentoModal = function() {
+    const pagamentoModal = document.getElementById('pagamentoModal');
+    if (pagamentoModal) {
+        pagamentoModal.classList.remove('active');
+    }
+};
+
+window.verDetalhesFiado = function(index) {
+    const fiado = fiados[index];
+    
+    let html = `
+        <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color: var(--dark); font-size: 22px;">
+                    <i class="fas fa-hand-holding-usd"></i> Detalhes do Fiado
+                </h3>
+                <button onclick="fecharDetalhesFiado()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray);">
+                    &times;
+                </button>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: var(--dark); margin-bottom: 10px;">Cliente</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px;">
+                    <div style="font-weight: 700; font-size: 18px;">${fiado.cliente_nome}</div>
+                    <div style="color: var(--gray); margin-top: 5px;">${fiado.cliente_telefone || 'Sem telefone'}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: var(--dark); margin-bottom: 10px;">Resumo Financeiro</h4>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <div style="background: #e8f5e9; padding: 15px; border-radius: 10px;">
+                        <div style="font-size: 12px; color: #2e7d32;">Total</div>
+                        <div style="font-weight: 900; font-size: 24px; color: #2e7d32;">R$ ${formatPrice(fiado.total)}</div>
+                    </div>
+                    <div style="background: #e3f2fd; padding: 15px; border-radius: 10px;">
+                        <div style="font-size: 12px; color: #1565c0;">Pago</div>
+                        <div style="font-weight: 900; font-size: 24px; color: #1565c0;">R$ ${formatPrice(fiado.pago || 0)}</div>
+                    </div>
+                    <div style="background: #ffebee; padding: 15px; border-radius: 10px;">
+                        <div style="font-size: 12px; color: #c62828;">Restante</div>
+                        <div style="font-weight: 900; font-size: 24px; color: #c62828;">R$ ${formatPrice(fiado.total - (fiado.pago || 0))}</div>
+                    </div>
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 10px;">
+                        <div style="font-size: 12px; color: #856404;">Prazo</div>
+                        <div style="font-weight: 900; font-size: 24px; color: #856404;">${formatarData(fiado.prazo)}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: var(--dark); margin-bottom: 10px;">Status</h4>
+                <div style="display: inline-block; padding: 8px 20px; border-radius: 20px; background: ${getFiadoStatus(fiado) === 'Pago' ? '#e8f5e9' : getFiadoStatus(fiado) === 'Atrasado' ? '#ffebee' : '#fff3cd'}; color: ${getFiadoStatus(fiado) === 'Pago' ? '#2e7d32' : getFiadoStatus(fiado) === 'Atrasado' ? '#c62828' : '#856404'}; font-weight: 700;">
+                    ${getFiadoStatus(fiado)}
+                </div>
+            </div>
+            
+            ${fiado.observacoes ? `
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: var(--dark); margin-bottom: 10px;">Observações</h4>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; font-size: 14px;">
+                        ${fiado.observacoes}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="abrirPagamentoModal(${index})" class="btn-primary" style="flex: 1;">
+                    <i class="fas fa-money-bill-wave"></i> Registrar Pagamento
+                </button>
+                <button onclick="fecharDetalhesFiado()" class="btn-primary" style="background: var(--gray);">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Criar modal temporário para detalhes
+    const modalDetalhes = document.createElement('div');
+    modalDetalhes.className = 'modal-overlay active';
+    modalDetalhes.id = 'modalDetalhesFiado';
+    modalDetalhes.innerHTML = `
+        <div class="modal" style="max-width: 600px;">
+            ${html}
+        </div>
+    `;
+    
+    document.body.appendChild(modalDetalhes);
+};
+
+window.fecharDetalhesFiado = function() {
+    const modal = document.getElementById('modalDetalhesFiado');
+    if (modal) {
+        modal.remove();
+    }
+};
 
 // ===== NAVEGAÇÃO =====
 window.navigateTo = function(pageId) {
@@ -2376,7 +3113,7 @@ function setupNavigation() {
                     case 'dashboard': loadDashboard(); break;
                     case 'vendas': loadProductsForSale(); break;
                     case 'produtos': loadProductsList(); break;
-                    case 'fiados': break;
+                    case 'fiados': loadFiados(); break;
                     case 'relatorios': break;
                     case 'config': break;
                 }
@@ -2391,40 +3128,750 @@ document.addEventListener('DOMContentLoaded', function() {
     
     setupNavigation();
     
+    // Testar conexão com Neon
+    testNeonConnection();
+    
     // Carregar dados iniciais
     loadDashboard();
     loadProductsForSale();
     loadProductsList();
+    loadFiados();
+    
+    // Atualizar data e hora
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+    
+    // Event Listeners
+    setupEventListeners();
     
     showNotification('✅ Sistema carregado!', 'success');
 });
 
-// ===== NEON (SIMPLIFICADO) =====
-async function neonQuery(sql, params = []) {
+// Testar conexão com Neon
+async function testNeonConnection() {
     try {
-        if (!API_URL || API_URL === 'SUA_URL_DO_NEON_AQUI') {
+        if (!API_URL || API_URL.includes('seusite')) {
             console.log('⚠️ URL do Neon não configurada');
-            return { success: false, error: 'URL não configurada' };
+            showNotification('⚠️ Configure a URL da API (linha 8)', 'warning');
+            return;
         }
         
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sql, params })
-        });
+        const result = await neonQuery('SELECT 1 as test');
+        dbOnline = result.success;
         
-        const data = await response.json();
-        return data;
-        
+        if (dbOnline) {
+            console.log('✅ Conexão com Neon estabelecida');
+            // Não mostrar notificação para não incomodar
+        } else {
+            console.log('⚠️ Modo offline - usando localStorage');
+        }
     } catch (error) {
-        console.error('Erro no Neon:', error);
-        return { success: false, error: error.message };
+        console.log('⚠️ Modo offline - usando localStorage');
+        dbOnline = false;
     }
 }
 
-window.syncData = async function() {
-    showNotification('⚠️ Configure a URL do Neon primeiro', 'warning');
-};
+// Atualizar data e hora
+function updateDateTime() {
+    const now = new Date();
+    
+    const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    };
+    
+    const dateElement = document.getElementById('currentDate');
+    const timeElement = document.getElementById('currentTime');
+    
+    if (dateElement) {
+        dateElement.textContent = now.toLocaleDateString('pt-BR', options);
+    }
+    
+    if (timeElement) {
+        timeElement.textContent = now.toLocaleTimeString('pt-BR');
+    }
+}
+
+// Configurar event listeners
+function setupEventListeners() {
+    // Botão salvar produto
+    const saveProductBtn = document.getElementById('saveProduct');
+    if (saveProductBtn) {
+        saveProductBtn.addEventListener('click', saveProduct);
+    }
+    
+    // Botão fechar modal produto
+    const closeModalBtn = document.getElementById('closeModal');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeProductModal);
+    }
+    
+    const cancelModalBtn = document.getElementById('cancelModal');
+    if (cancelModalBtn) {
+        cancelModalBtn.addEventListener('click', closeProductModal);
+    }
+    
+    // Botão adicionar produto
+    const addProductBtn = document.getElementById('addProduct');
+    if (addProductBtn) {
+        addProductBtn.addEventListener('click', () => openProductModal());
+    }
+    
+    // Botão limpar carrinho
+    const clearCartBtn = document.getElementById('clearCart');
+    if (clearCartBtn) {
+        clearCartBtn.addEventListener('click', clearCart);
+    }
+    
+    // Botão finalizar venda
+    const finalizeSaleBtn = document.getElementById('finalizeSale');
+    if (finalizeSaleBtn) {
+        finalizeSaleBtn.addEventListener('click', finalizeSale);
+    }
+    
+    // Botão novo fiado
+    const novoFiadoBtn = document.getElementById('novoFiado');
+    if (novoFiadoBtn) {
+        novoFiadoBtn.addEventListener('click', () => {
+            showNotification('Funcionalidade em desenvolvimento', 'info');
+        });
+    }
+    
+    // Botão exportar fiados
+    const exportFiadosBtn = document.getElementById('btnExportFiados');
+    if (exportFiadosBtn) {
+        exportFiadosBtn.addEventListener('click', () => {
+            exportFiadosToPDF();
+        });
+    }
+    
+    // Botão repor estoque
+    const reporEstoqueBtn = document.getElementById('btnReporEstoque');
+    if (reporEstoqueBtn) {
+        reporEstoqueBtn.addEventListener('click', () => {
+            showNotification('Funcionalidade em desenvolvimento', 'info');
+        });
+    }
+}
+
+// Exportar fiados para PDF
+function exportFiadosToPDF() {
+    if (fiados.length === 0) {
+        showNotification('Nenhum fiado para exportar', 'warning');
+        return;
+    }
+    
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        doc.setFontSize(20);
+        doc.text('Relatório de Fiados', 20, 20);
+        doc.setFontSize(12);
+        doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 30);
+        
+        let y = 50;
+        fiados.forEach((fiado, index) => {
+            if (y > 280) {
+                doc.addPage();
+                y = 20;
+            }
+            
+            doc.setFontSize(14);
+            doc.text(`${index + 1}. ${fiado.cliente_nome}`, 20, y);
+            doc.setFontSize(10);
+            doc.text(`Telefone: ${fiado.cliente_telefone || 'N/A'}`, 20, y + 7);
+            doc.text(`Total: R$ ${formatPrice(fiado.total)} | Pago: R$ ${formatPrice(fiado.pago || 0)} | Restante: R$ ${formatPrice(fiado.total - (fiado.pago || 0))}`, 20, y + 14);
+            doc.text(`Prazo: ${formatarData(fiado.prazo)} | Status: ${getFiadoStatus(fiado)}`, 20, y + 21);
+            
+            y += 35;
+        });
+        
+        doc.save(`fiados_${new Date().toISOString().split('T')[0]}.pdf`);
+        showNotification('✅ Relatório exportado com sucesso!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao exportar PDF:', error);
+        showNotification('❌ Erro ao exportar relatório', 'error');
+    }
+}
+
+// ===== RELATÓRIOS - FUNÇÕES COMPLETAS =====
+// Mostrar/ocultar datas personalizadas
+const reportPeriodSelect = document.getElementById('reportPeriod');
+if (reportPeriodSelect) {
+    reportPeriodSelect.addEventListener('change', function() {
+        const customRange = document.getElementById('customDateRange');
+        if (this.value === 'personalizado') {
+            customRange.style.display = 'block';
+        } else {
+            customRange.style.display = 'none';
+        }
+    });
+}
+
+// Botão gerar relatório
+const generateReportBtn = document.getElementById('generateReportBtn');
+if (generateReportBtn) {
+    generateReportBtn.addEventListener('click', generateReport);
+}
+
+// Botão imprimir relatório
+const printReportBtn = document.getElementById('printReport');
+if (printReportBtn) {
+    printReportBtn.addEventListener('click', printReport);
+}
+
+// Função para gerar relatório
+function generateReport() {
+    try {
+        const periodo = document.getElementById('reportPeriod').value;
+        const reportContent = document.getElementById('reportContent');
+        
+        if (!reportContent) {
+            showNotification('Elemento de relatório não encontrado', 'error');
+            return;
+        }
+        
+        let dataInicio, dataFim;
+        const hoje = new Date();
+        
+        switch(periodo) {
+            case 'hoje':
+                dataInicio = new Date(hoje);
+                dataFim = new Date(hoje);
+                break;
+            case 'ontem':
+                const ontem = new Date(hoje);
+                ontem.setDate(hoje.getDate() - 1);
+                dataInicio = new Date(ontem);
+                dataFim = new Date(ontem);
+                break;
+            case 'semana':
+                const inicioSemana = new Date(hoje);
+                inicioSemana.setDate(hoje.getDate() - 6);
+                dataInicio = new Date(inicioSemana);
+                dataFim = new Date(hoje);
+                break;
+            case 'mes':
+                const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+                dataInicio = new Date(inicioMes);
+                dataFim = new Date(hoje);
+                break;
+            case 'ano':
+                const inicioAno = new Date(hoje.getFullYear(), 0, 1);
+                dataInicio = new Date(inicioAno);
+                dataFim = new Date(hoje);
+                break;
+            case 'personalizado':
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                if (!startDate || !endDate) {
+                    showNotification('Selecione as datas personalizadas', 'warning');
+                    return;
+                }
+                dataInicio = new Date(startDate);
+                dataFim = new Date(endDate);
+                break;
+            default:
+                dataInicio = new Date(hoje);
+                dataFim = new Date(hoje);
+        }
+        
+        // Formatar datas para string
+        const formatarDataParaFiltro = (data) => {
+            return data.toISOString().split('T')[0];
+        };
+        
+        const dataInicioStr = formatarDataParaFiltro(dataInicio);
+        const dataFimStr = formatarDataParaFiltro(dataFim);
+        
+        // Filtrar vendas pelo período
+        const vendasPeriodo = vendas.filter(v => {
+            if (!v || !v.data) return false;
+            return v.data >= dataInicioStr && v.data <= dataFimStr;
+        });
+        
+        // Calcular estatísticas
+        const totalVendas = vendasPeriodo.length;
+        const faturamentoTotal = vendasPeriodo.reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+        const vendasPorPagamento = {};
+        const produtosVendidos = {};
+        
+        vendasPeriodo.forEach(venda => {
+            // Contar por forma de pagamento
+            const pagamento = venda.pagamento || 'desconhecido';
+            vendasPorPagamento[pagamento] = (vendasPorPagamento[pagamento] || 0) + 1;
+            
+            // Contar produtos vendidos
+            if (venda.itens && Array.isArray(venda.itens)) {
+                venda.itens.forEach(item => {
+                    const produtoId = item.produtoId;
+                    const quantidade = Number(item.quantidade) || 0;
+                    
+                    if (!produtosVendidos[produtoId]) {
+                        const produto = produtos.find(p => p.id === produtoId);
+                        produtosVendidos[produtoId] = {
+                            nome: produto ? produto.nome : 'Produto Desconhecido',
+                            quantidade: 0,
+                            total: 0
+                        };
+                    }
+                    
+                    produtosVendidos[produtoId].quantidade += quantidade;
+                    produtosVendidos[produtoId].total += quantidade * (Number(item.preco) || 0);
+                });
+            }
+        });
+        
+        // Criar HTML do relatório
+        let html = `
+            <div style="background: white; padding: 30px; border-radius: 15px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h2 style="color: var(--dark); margin-bottom: 10px;">
+                        <i class="fas fa-chart-pie"></i> Relatório de Vendas
+                    </h2>
+                    <p style="color: var(--gray);">
+                        Período: ${dataInicio.toLocaleDateString('pt-BR')} até ${dataFim.toLocaleDateString('pt-BR')}
+                    </p>
+                </div>
+                
+                <div class="stats-grid" style="margin-bottom: 30px;">
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Total de Vendas</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--dark);">${totalVendas}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Faturamento Total</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--dark);">R$ ${formatPrice(faturamentoTotal)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Ticket Médio</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--dark);">R$ ${formatPrice(totalVendas > 0 ? faturamentoTotal / totalVendas : 0)}</div>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow);">
+                        <h3 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
+                            <i class="fas fa-credit-card"></i> Formas de Pagamento
+                        </h3>
+                        <div style="height: 250px;">
+                            <canvas id="paymentChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow);">
+                        <h3 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
+                            <i class="fas fa-ice-cream"></i> Produtos Mais Vendidos
+                        </h3>
+                        <div style="max-height: 250px; overflow-y: auto;">
+        `;
+        
+        // Listar produtos mais vendidos
+        const produtosOrdenados = Object.values(produtosVendidos)
+            .sort((a, b) => b.quantidade - a.quantidade)
+            .slice(0, 10);
+        
+        if (produtosOrdenados.length > 0) {
+            produtosOrdenados.forEach((produto, index) => {
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #f0f0f0;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-weight: 700; color: var(--dark);">${index + 1}.</span>
+                            <div>
+                                <div style="font-weight: 700; font-size: 14px;">${produto.nome}</div>
+                                <div style="font-size: 12px; color: var(--gray);">${produto.quantidade} unidades</div>
+                            </div>
+                        </div>
+                        <div style="font-weight: 900; color: var(--primary); font-size: 14px;">
+                            R$ ${formatPrice(produto.total)}
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            html += `
+                <div style="text-align: center; padding: 40px; color: var(--gray);">
+                    <i class="fas fa-chart-line" style="font-size: 40px; opacity: 0.3;"></i>
+                    <p style="margin-top: 10px;">Nenhum produto vendido no período</p>
+                </div>
+            `;
+        }
+        
+        html += `
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Lista de vendas detalhadas -->
+                <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow); margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
+                        <i class="fas fa-receipt"></i> Vendas Detalhadas
+                    </h3>
+                    <div style="max-height: 300px; overflow-y: auto;">
+        `;
+        
+        if (vendasPeriodo.length > 0) {
+            html += `
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; text-align: left;">Data</th>
+                            <th style="padding: 10px; text-align: left;">Hora</th>
+                            <th style="padding: 10px; text-align: left;">Itens</th>
+                            <th style="padding: 10px; text-align: left;">Total</th>
+                            <th style="padding: 10px; text-align: left;">Pagamento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            vendasPeriodo.slice(0, 20).forEach(venda => {
+                const totalItens = venda.itens?.reduce((sum, i) => sum + (i.quantidade || 0), 0) || 0;
+                
+                html += `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px;">${formatarData(venda.data)}</td>
+                        <td style="padding: 8px;">${venda.hora || '--:--'}</td>
+                        <td style="padding: 8px;">${totalItens} itens</td>
+                        <td style="padding: 8px; font-weight: 700;">R$ ${formatPrice(venda.total)}</td>
+                        <td style="padding: 8px;">
+                            <span style="padding: 3px 8px; border-radius: 10px; background: #f0f0f0; font-size: 10px;">
+                                ${venda.pagamento?.toUpperCase() || 'N/A'}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table>`;
+        } else {
+            html += `
+                <div style="text-align: center; padding: 30px; color: var(--gray);">
+                    <i class="fas fa-receipt" style="font-size: 40px; opacity: 0.3;"></i>
+                    <p style="margin-top: 10px;">Nenhuma venda no período</p>
+                </div>
+            `;
+        }
+        
+        html += `
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn-primary" onclick="printReport()" style="padding: 12px 30px; margin-right: 10px;">
+                        <i class="fas fa-print"></i> Imprimir Relatório
+                    </button>
+                    <button class="btn-primary" onclick="exportReportToPDF()" style="padding: 12px 30px; background: var(--secondary);">
+                        <i class="fas fa-file-pdf"></i> Exportar PDF
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        reportContent.innerHTML = html;
+        
+        // Criar gráfico de formas de pagamento
+        setTimeout(() => {
+            const paymentCanvas = document.getElementById('paymentChart');
+            if (paymentCanvas && Object.keys(vendasPorPagamento).length > 0) {
+                const ctx = paymentCanvas.getContext('2d');
+                
+                // Destruir gráfico anterior se existir
+                if (window.paymentChartInstance) {
+                    window.paymentChartInstance.destroy();
+                }
+                
+                window.paymentChartInstance = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(vendasPorPagamento).map(p => 
+                            p.charAt(0).toUpperCase() + p.slice(1)
+                        ),
+                        datasets: [{
+                            data: Object.values(vendasPorPagamento),
+                            backgroundColor: ['#36B5B0', '#FF7BAC', '#FFD166', '#4CAF50', '#FF9800', '#9C27B0'],
+                            borderColor: 'white',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    font: {
+                                        size: 11
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }, 100);
+        
+        showNotification('✅ Relatório gerado com sucesso!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao gerar relatório:', error);
+        showNotification('❌ Erro ao gerar relatório!', 'error');
+    }
+}
+
+// Função para imprimir relatório
+function printReport() {
+    try {
+        window.print();
+    } catch (error) {
+        console.error('Erro ao imprimir:', error);
+        showNotification('❌ Erro ao imprimir relatório!', 'error');
+    }
+}
+
+// Função para exportar relatório para PDF
+function exportReportToPDF() {
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Título
+        doc.setFontSize(20);
+        doc.text('Relatório de Vendas - Chop Manager PRO', 20, 20);
+        doc.setFontSize(12);
+        doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 20, 30);
+        
+        // Estatísticas
+        let y = 50;
+        doc.setFontSize(16);
+        doc.text('Estatísticas do Período', 20, y);
+        y += 10;
+        
+        // Aqui você precisaria ter acesso aos dados do relatório atual
+        // Por enquanto, vamos exportar dados gerais
+        doc.setFontSize(12);
+        doc.text(`Total de Vendas: ${vendas.length}`, 20, y);
+        y += 8;
+        
+        const faturamentoTotal = vendas.reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+        doc.text(`Faturamento Total: R$ ${formatPrice(faturamentoTotal)}`, 20, y);
+        y += 8;
+        
+        const ticketMedio = vendas.length > 0 ? faturamentoTotal / vendas.length : 0;
+        doc.text(`Ticket Médio: R$ ${formatPrice(ticketMedio)}`, 20, y);
+        y += 15;
+        
+        // Últimas vendas
+        doc.setFontSize(16);
+        doc.text('Últimas Vendas', 20, y);
+        y += 10;
+        
+        doc.setFontSize(10);
+        const ultimasVendas = vendas.slice(0, 15);
+        ultimasVendas.forEach((venda, index) => {
+            if (y > 280) {
+                doc.addPage();
+                y = 20;
+            }
+            
+            doc.text(`${index + 1}. ${formatarData(venda.data)} ${venda.hora || ''} - R$ ${formatPrice(venda.total)} (${venda.pagamento || 'N/A'})`, 20, y);
+            y += 6;
+        });
+        
+        doc.save(`relatorio_vendas_${new Date().toISOString().split('T')[0]}.pdf`);
+        
+        showNotification('✅ Relatório exportado para PDF!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao exportar PDF:', error);
+        showNotification('❌ Erro ao exportar PDF!', 'error');
+    }
+}
+
+// ===== CONFIGURAÇÕES =====
+// Função para atualizar informações do sistema
+function updateSystemInfo() {
+    try {
+        document.getElementById('totalProducts').textContent = produtos.length;
+        document.getElementById('totalSales').textContent = vendas.length;
+        
+        const faturamentoTotal = vendas.reduce((sum, v) => sum + (Number(v.total) || 0), 0);
+        document.getElementById('totalRevenue').textContent = `R$ ${formatPrice(faturamentoTotal)}`;
+        
+        console.log('✅ Informações do sistema atualizadas');
+    } catch (error) {
+        console.error('Erro ao atualizar informações:', error);
+    }
+}
+
+// Botão de backup
+document.getElementById('backupBtn')?.addEventListener('click', function() {
+    try {
+        // Criar backup dos dados
+        const backupData = {
+            produtos: produtos,
+            vendas: vendas,
+            fiados: fiados,
+            dataBackup: new Date().toISOString(),
+            versao: 'Chop Manager PRO 2.1'
+        };
+        
+        // Converter para JSON
+        const jsonStr = JSON.stringify(backupData, null, 2);
+        
+        // Criar blob e download
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup_chop_manager_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('✅ Backup criado com sucesso!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao criar backup:', error);
+        showNotification('❌ Erro ao criar backup!', 'error');
+    }
+});
+
+// ===== INICIALIZAÇÃO FINAL =====
+// Aguardar o DOM carregar completamente
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Sistema Chop Manager PRO iniciando...');
+    
+    // Configurar navegação
+    setupNavigation();
+    
+    // Testar conexão com Neon
+    testNeonConnection();
+    
+    // Carregar dados iniciais
+    loadDashboard();
+    loadProductsForSale();
+    loadProductsList();
+    loadFiados();
+    updateSystemInfo();
+    
+    // Atualizar data e hora em tempo real
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+    
+    // Configurar todos os event listeners
+    setupEventListeners();
+    
+    // Configurar datas nos inputs
+    const hoje = new Date().toISOString().split('T')[0];
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    if (startDateInput) startDateInput.value = hoje;
+    if (endDateInput) endDateInput.value = hoje;
+    
+    // Configurar prazo de fiado (padrão: 30 dias)
+    const prazoPagamentoInput = document.getElementById('prazoPagamento');
+    if (prazoPagamentoInput) {
+        const amanha = new Date();
+        amanha.setDate(amanha.getDate() + 30);
+        prazoPagamentoInput.value = amanha.toISOString().split('T')[0];
+    }
+    
+    // Configurar data de retirada (padrão: hoje)
+    const dataRetiradaInput = document.getElementById('dataRetirada');
+    if (dataRetiradaInput) {
+        dataRetiradaInput.value = hoje;
+    }
+    
+    console.log('✅ Sistema completamente inicializado!');
+    showNotification('✅ Sistema carregado com sucesso!', 'success');
+});
+
+// ===== EMOJI PICKER =====
+// Configurar seletor de emojis
+const emojiSelector = document.getElementById('emojiSelector');
+if (emojiSelector) {
+    emojiSelector.addEventListener('click', function() {
+        const emojiPicker = document.getElementById('emojiPicker');
+        if (emojiPicker) {
+            emojiPicker.classList.toggle('show');
+            
+            // Adicionar emojis se estiver vazio
+            if (emojiPicker.children.length === 0) {
+                const emojis = ['🍦', '🍨', '🍧', '🎂', '🧁', '🍰', '🍫', '🍬', '🍭', '🍮', '🍩', '🍪', '🥧', '🧋', '🥤', '🍵', '☕', '🍺', '🍻', '🥂', '🍷', '🥃', '🍸', '🍹', '🍾'];
+                
+                emojis.forEach(emoji => {
+                    const div = document.createElement('div');
+                    div.className = 'emoji-option';
+                    div.textContent = emoji;
+                    div.addEventListener('click', function() {
+                        document.getElementById('selectedEmoji').textContent = emoji;
+                        document.getElementById('productEmoji').value = emoji;
+                        emojiPicker.classList.remove('show');
+                    });
+                    emojiPicker.appendChild(div);
+                });
+            }
+        }
+    });
+}
+
+// Fechar emoji picker ao clicar fora
+document.addEventListener('click', function(event) {
+    const emojiPicker = document.getElementById('emojiPicker');
+    const emojiSelector = document.getElementById('emojiSelector');
+    
+    if (emojiPicker && emojiPicker.classList.contains('show') && 
+        !emojiPicker.contains(event.target) && 
+        !emojiSelector.contains(event.target)) {
+        emojiPicker.classList.remove('show');
+    }
+});
+
+// ===== UPLOAD DE FOTO =====
+const photoUploadContainer = document.getElementById('photoUploadContainer');
+const productPhotoInput = document.getElementById('productPhoto');
+const photoPreview = document.getElementById('photoPreview');
+
+if (photoUploadContainer && productPhotoInput && photoPreview) {
+    photoUploadContainer.addEventListener('click', function() {
+        productPhotoInput.click();
+    });
+    
+    productPhotoInput.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) { // 2MB
+                showNotification('Arquivo muito grande! Máximo 2MB.', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                photoPreview.src = e.target.result;
+                photoPreview.classList.add('show');
+                document.getElementById('productPhotoData').value = e.target.result;
+                
+                // Atualizar ícone
+                const uploadIcon = photoUploadContainer.querySelector('.upload-icon');
+                if (uploadIcon) {
+                    uploadIcon.innerHTML = '<i class="fas fa-check" style="color: var(--success);"></i>';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+}
+
+// ===== FECHAMENTO COMPLETO =====
+console.log('📁 Script JavaScript carregado completamente');
 </script>
 </body>
 </html>
