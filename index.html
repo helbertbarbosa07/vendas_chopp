@@ -1549,7 +1549,11 @@
     <div class="notification" id="notification"></div>
 <script>
 // ===== CONFIGURAÇÃO NEON =====
-const API_URL = '/api/neon';
+// IMPORTANTE: Escolha uma das opções abaixo para API_URL:
+const API_URL = 'https://seu-app.vercel.app/api/neon'; // URL completa para produção
+// const API_URL = '/api/neon'; // Para desenvolvimento local
+// const API_URL = 'api/neon'; // Alternativa sem barra inicial
+
 let produtos = [];
 let vendas = [];
 let fiados = [];
@@ -1557,9 +1561,39 @@ let carrinho = [];
 let charts = {};
 let isLoading = false;
 
+// ===== TESTE DE CONEXÃO =====
+async function testConnection() {
+    try {
+        console.log('🔌 Testando conexão com API...');
+        
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'test' })
+        });
+        
+        console.log('📡 Status da resposta:', response.status);
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ API conectada:', data);
+            return true;
+        } else {
+            console.error('❌ API não respondeu corretamente');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Falha na conexão:', error);
+        return false;
+    }
+}
+
 // ===== FUNÇÃO PRINCIPAL NEON =====
 async function neonAPI(action, data = null) {
-    if (isLoading) return;
+    if (isLoading) {
+        console.log(`⏳ ${action} em espera (já carregando)`);
+        return;
+    }
     
     try {
         isLoading = true;
@@ -1571,11 +1605,23 @@ async function neonAPI(action, data = null) {
             body: JSON.stringify({ action, data })
         });
         
+        console.log('📡 Status da resposta:', response.status);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            let errorDetail = '';
+            try {
+                const errorText = await response.text();
+                errorDetail = errorText;
+                console.error('❌ Resposta do servidor:', errorText);
+            } catch (e) {
+                errorDetail = 'Não foi possível ler resposta';
+            }
+            
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorDetail}`);
         }
         
         const result = await response.json();
+        console.log('📦 Dados recebidos:', result);
         
         if (!result.success) {
             throw new Error(result.error || 'Erro na API');
@@ -1586,7 +1632,22 @@ async function neonAPI(action, data = null) {
         
     } catch (error) {
         console.error(`❌ Erro em ${action}:`, error);
-        showNotification(`Erro: ${error.message}`, 'error');
+        
+        let errorMsg = error.message;
+        if (error.name === 'TypeError') {
+            if (error.message.includes('fetch')) {
+                errorMsg = 'Erro de conexão com a API. Verifique:';
+                errorMsg += '\n1. URL da API está correta?';
+                errorMsg += '\n2. Servidor está rodando?';
+                errorMsg += '\n3. Problema de CORS?';
+            } else if (error.message.includes('JSON')) {
+                errorMsg = 'Resposta inválida da API';
+            }
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMsg = 'Não foi possível conectar ao servidor';
+        }
+        
+        showNotification(`Erro: ${errorMsg}`, 'error');
         throw error;
     } finally {
         isLoading = false;
@@ -1597,7 +1658,7 @@ async function neonAPI(action, data = null) {
 function formatPrice(value) {
     if (value === undefined || value === null || value === '') return '0.00';
     const num = Number(value);
-    return isNaN(num) ? '0.00' : num.toFixed(2);
+    return isNaN(num) ? '0.00' : num.toFixed(2).replace('.', ',');
 }
 
 function formatarData(dataString) {
@@ -1634,6 +1695,11 @@ function updateDateTime() {
 
 function showNotification(mensagem, tipo = 'info') {
     const notification = document.getElementById('notification');
+    if (!notification) {
+        console.log(`[${tipo.toUpperCase()}] ${mensagem}`);
+        return;
+    }
+    
     notification.textContent = mensagem;
     notification.className = `notification ${tipo} show`;
     
@@ -1642,9 +1708,84 @@ function showNotification(mensagem, tipo = 'info') {
     }, 3000);
 }
 
+function showFallbackData() {
+    console.log('📱 Exibindo dados de fallback (modo offline)');
+    
+    // Dashboard
+    document.getElementById('todayRevenue').textContent = 'R$ 0,00';
+    document.getElementById('todayChops').textContent = '0';
+    document.getElementById('avgSale').textContent = 'R$ 0,00';
+    document.getElementById('lowStock').textContent = '0';
+    
+    // Vendas Recentes
+    const recentSalesList = document.getElementById('recentSalesList');
+    if (recentSalesList) {
+        recentSalesList.innerHTML = `
+            <div class="empty-sales">
+                <i class="fas fa-wifi-slash"></i>
+                <p>Modo offline</p>
+            </div>
+        `;
+    }
+    
+    // Produtos Top
+    const topProductsList = document.getElementById('topProductsList');
+    if (topProductsList) {
+        topProductsList.innerHTML = `
+            <div class="empty-sales">
+                <i class="fas fa-wifi-slash"></i>
+                <p>Modo offline</p>
+            </div>
+        `;
+    }
+    
+    // Produtos para venda
+    const productsGrid = document.getElementById('productsGrid');
+    if (productsGrid) {
+        productsGrid.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--warning); grid-column: 1 / -1;">
+                <i class="fas fa-wifi-slash" style="font-size: 50px;"></i>
+                <p style="margin-top: 10px;">Modo offline</p>
+                <p style="font-size: 14px; margin-top: 5px;">Conecte-se ao servidor para carregar produtos</p>
+                <button onclick="syncData()" style="margin-top: 15px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-redo"></i> Tentar reconectar
+                </button>
+            </div>
+        `;
+    }
+    
+    // Gráficos
+    const flavorsChartContainer = document.querySelector('#flavorsChart')?.parentElement;
+    const weeklyChartContainer = document.querySelector('#weeklyChart')?.parentElement;
+    
+    if (flavorsChartContainer) {
+        flavorsChartContainer.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: var(--gray);">
+                <i class="fas fa-wifi-slash" style="font-size: 40px; opacity: 0.3;"></i>
+                <p>Modo offline</p>
+            </div>
+        `;
+    }
+    
+    if (weeklyChartContainer) {
+        weeklyChartContainer.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: var(--gray);">
+                <i class="fas fa-wifi-slash" style="font-size: 40px; opacity: 0.3;"></i>
+                <p>Modo offline</p>
+            </div>
+        `;
+    }
+}
+
 // ===== INICIALIZAÇÃO =====
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('🚀 Sistema Neon carregando...');
+    console.log('🌐 Ambiente:', {
+        hostname: window.location.hostname,
+        protocol: window.location.protocol,
+        pathname: window.location.pathname,
+        API_URL: API_URL
+    });
     
     updateDateTime();
     setInterval(updateDateTime, 1000);
@@ -1653,20 +1794,34 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupEventListeners();
     initComponents();
     
-    try {
-        showNotification('🔄 Conectando ao Neon...', 'info');
-        
-        const test = await neonAPI('get_produtos');
-        console.log('✅ Conectado ao Neon!', test.length, 'produtos carregados');
-        
-        await loadDashboard();
-        await loadProductsForSale();
-        
-        showNotification('✅ Sistema conectado ao Neon!', 'success');
-        
-    } catch (error) {
-        console.error('❌ Falha na conexão Neon:', error);
-        showNotification('❌ Erro ao conectar ao Neon. Verifique sua conexão.', 'error');
+    // Testar conexão primeiro
+    showNotification('🔌 Conectando ao servidor...', 'info');
+    const isConnected = await testConnection();
+    
+    if (isConnected) {
+        try {
+            showNotification('🔄 Conectando ao banco de dados Neon...', 'info');
+            
+            // Teste simples primeiro - tentar carregar produtos
+            produtos = await neonAPI('get_produtos');
+            console.log('✅ Neon conectado! Produtos:', produtos?.length || 0);
+            
+            if (Array.isArray(produtos)) {
+                await loadDashboard();
+                await loadProductsForSale();
+                showNotification('✅ Sistema conectado com sucesso!', 'success');
+            } else {
+                throw new Error('Resposta inválida do servidor');
+            }
+            
+        } catch (error) {
+            console.error('❌ Falha na conexão com dados:', error);
+            showNotification('⚠️ Conectado, mas erro nos dados. Modo limitado.', 'warning');
+            showFallbackData();
+        }
+    } else {
+        showNotification('❌ Servidor offline. Modo desconectado.', 'error');
+        showFallbackData();
     }
 });
 
@@ -1805,13 +1960,13 @@ function initComponents() {
 // ===== DASHBOARD =====
 async function loadDashboard() {
     try {
+        console.log('📊 Carregando dashboard...');
         showLoading('recentSalesList', 'Carregando dashboard...');
         showLoading('topProductsList', 'Carregando produtos...');
         
-        // Usar ação específica para dashboard
         const stats = await neonAPI('get_dashboard_stats');
         
-        // CORREÇÃO: Garantir que os valores existam
+        // Garantir que os valores existam
         const faturamentoHoje = stats?.faturamentoHoje || 0;
         const totalItens = stats?.totalItens || 0;
         const totalVendas = stats?.totalVendas || 0;
@@ -1839,7 +1994,7 @@ async function loadDashboard() {
         console.error('Erro no dashboard:', error);
         showNotification('Erro ao carregar dashboard', 'error');
         
-        // Fallback em caso de erro
+        // Fallback
         document.getElementById('todayRevenue').textContent = 'R$ 0,00';
         document.getElementById('todayChops').textContent = '0';
         document.getElementById('avgSale').textContent = 'R$ 0,00';
@@ -1932,7 +2087,6 @@ async function loadRecentSales() {
 async function loadTopProducts(produtosData) {
     const topProductsList = document.getElementById('topProductsList');
     
-    // CORREÇÃO: Verificar se produtosData é array
     if (!Array.isArray(produtosData) || produtosData.length === 0) {
         topProductsList.innerHTML = `
             <div class="empty-sales">
@@ -1943,7 +2097,6 @@ async function loadTopProducts(produtosData) {
         return;
     }
     
-    // Filtrar apenas produtos com vendas
     const produtosComVendas = produtosData.filter(p => (p.vendas_hoje || 0) > 0);
     
     if (produtosComVendas.length === 0) {
@@ -1985,7 +2138,6 @@ async function loadLowStockProducts() {
         const lowStockList = document.getElementById('lowStockList');
         const lowStockContainer = document.getElementById('lowStockContainer');
         
-        // CORREÇÃO: Verificar se tem produtos
         if (!Array.isArray(todosProdutos)) {
             lowStockContainer.style.display = 'none';
             return;
@@ -2028,12 +2180,12 @@ async function loadLowStockProducts() {
 // ===== VENDAS =====
 async function loadProductsForSale() {
     try {
+        console.log('🛍️ Carregando produtos para venda...');
         showLoading('productsGrid', 'Carregando produtos...');
         
         produtos = await neonAPI('get_produtos');
         const productsGrid = document.getElementById('productsGrid');
         
-        // CORREÇÃO: Verificar se produtos é array
         if (!Array.isArray(produtos)) {
             productsGrid.innerHTML = `
                 <div class="empty-sales" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -2097,7 +2249,7 @@ async function loadProductsForSale() {
     }
 }
 
-// Funções do carrinho mantidas iguais
+// Funções do carrinho
 window.addToCart = function(produtoId) {
     const produto = produtos.find(p => p.id === produtoId);
     if (!produto) {
@@ -2316,7 +2468,6 @@ async function loadProductsList() {
         const filter = document.getElementById('productFilter')?.value || 'todos';
         const search = document.getElementById('productSearch')?.value.toLowerCase() || '';
         
-        // CORREÇÃO: Verificar se produtos é array
         if (!Array.isArray(produtos)) {
             const productsList = document.getElementById('productsList');
             productsList.innerHTML = `
@@ -2557,7 +2708,6 @@ async function updateCharts() {
         if (flavorsCtx) {
             if (charts.flavors) charts.flavors.destroy();
             
-            // CORREÇÃO: Usar produtosMaisVendidos do dashboard stats
             const produtosComVendas = stats?.produtosMaisVendidos || [];
             
             if (Array.isArray(produtosComVendas) && produtosComVendas.length > 0 && produtosComVendas.some(p => p.vendas_hoje > 0)) {
@@ -2591,7 +2741,6 @@ async function updateCharts() {
                     }
                 });
             } else {
-                // CORREÇÃO: Fallback para mensagem amigável
                 flavorsCtx.parentElement.innerHTML = `
                     <div style="text-align: center; padding: 30px; color: var(--gray);">
                         <i class="fas fa-chart-pie" style="font-size: 40px; opacity: 0.3;"></i>
@@ -2607,7 +2756,6 @@ async function updateCharts() {
         if (weeklyCtx) {
             if (charts.weekly) charts.weekly.destroy();
             
-            // CORREÇÃO: Verificar se vendasSemana tem dados
             if (Array.isArray(vendasSemana) && vendasSemana.length > 0) {
                 const dias = vendasSemana.map(v => {
                     try {
@@ -2623,7 +2771,6 @@ async function updateCharts() {
                     return isNaN(total) ? 0 : total;
                 });
                 
-                // Verificar se há pelo menos um valor maior que 0
                 if (totais.some(total => total > 0)) {
                     charts.weekly = new Chart(weeklyCtx, {
                         type: 'line',
@@ -2675,7 +2822,6 @@ async function updateCharts() {
     } catch (error) {
         console.error('Erro ao atualizar gráficos:', error);
         
-        // CORREÇÃO: Mostrar mensagens de erro amigáveis
         const flavorsCtx = document.getElementById('flavorsChart');
         const weeklyCtx = document.getElementById('weeklyChart');
         
@@ -2704,17 +2850,14 @@ async function loadReports() {
     try {
         showLoading('reportContent', 'Gerando relatório...');
         
-        // CORREÇÃO: Usar ação específica para relatório
         const relatorio = await neonAPI('get_relatorio_completo');
         
-        // CORREÇÃO: Verificar se relatório tem dados
         if (!relatorio) {
             throw new Error('Relatório vazio');
         }
         
         const reportContent = document.getElementById('reportContent');
         
-        // CORREÇÃO: Garantir que valores existam
         const totalVendas = relatorio.totalVendas || 0;
         const totalProdutos = relatorio.totalProdutos || 0;
         const totalFaturamento = relatorio.totalFaturamento || 0;
@@ -2773,7 +2916,6 @@ async function loadReports() {
         console.error('Erro ao gerar relatório:', error);
         showNotification('Erro ao gerar relatório', 'error');
         
-        // CORREÇÃO: Mensagem de erro mais amigável
         document.getElementById('reportContent').innerHTML = `
             <div style="text-align: center; padding: 40px; color: var(--gray);">
                 <i class="fas fa-exclamation-triangle" style="font-size: 50px; color: var(--warning);"></i>
@@ -2789,9 +2931,7 @@ async function loadReports() {
     }
 }
 
-// Função auxiliar para tabela de vendas
 function generateSalesTable(vendasList) {
-    // CORREÇÃO: Verificar se vendasList é array
     if (!Array.isArray(vendasList) || vendasList.length === 0) {
         return `
             <div style="text-align: center; padding: 30px; color: var(--gray);">
@@ -2878,7 +3018,6 @@ async function loadConfig() {
     try {
         const relatorio = await neonAPI('get_relatorio_completo');
         
-        // CORREÇÃO: Valores padrão caso erro
         const totalProdutos = relatorio?.totalProdutos || 0;
         const totalVendas = relatorio?.totalVendas || 0;
         const totalFaturamento = relatorio?.totalFaturamento || 0;
@@ -2964,7 +3103,6 @@ async function carregarFiados() {
 }
 
 function calcularResumoFiados() {
-    // Implementação básica
     document.getElementById('totalReceber').textContent = 'R$ 0,00';
     document.getElementById('clientesAtraso').textContent = '0';
     document.getElementById('fiadosAtivos').textContent = '0';
@@ -3006,6 +3144,34 @@ function abrirModalFiadoParaVenda() {
 function exportarFiados() {
     showNotification('Funcionalidade de fiados em desenvolvimento', 'info');
 }
+
+// ===== DEPURAÇÃO =====
+// Adicione esta função para testar no console
+window.debugConnection = async function() {
+    console.log('🔧 Iniciando debug de conexão...');
+    console.log('📡 URL da API:', API_URL);
+    
+    try {
+        console.log('1. Testando conexão básica...');
+        const test1 = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'test' })
+        });
+        console.log('Status:', test1.status, 'OK:', test1.ok);
+        
+        console.log('2. Testando ação get_produtos...');
+        const test2 = await neonAPI('get_produtos');
+        console.log('Produtos recebidos:', Array.isArray(test2) ? test2.length : 'Não é array');
+        
+        console.log('3. Verificando ambiente...');
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Online:', navigator.onLine);
+        
+    } catch (error) {
+        console.error('❌ Debug falhou:', error);
+    }
+};
 </script>
 </body>
 </html>
