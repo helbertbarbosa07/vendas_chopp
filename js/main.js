@@ -65,7 +65,7 @@ const ChopManager = {
         }
     },
 
-    // Atualizar data e hora
+    // Atualizar data e hora (mantida para compatibilidade)
     updateDateTime: function() {
         const now = new Date();
         const optionsDate = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -85,7 +85,6 @@ const ChopManager = {
     // Configurar navegação
     setupNavigation: function() {
         const tabs = document.querySelectorAll('.nav-tab');
-        const pages = document.querySelectorAll('.page');
 
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
@@ -366,9 +365,26 @@ const ChopManager = {
 
     loadConfig: async function() {
         console.log('⚙️ Carregando configurações...');
-        // Implementado em main.js
+        // Implementado separadamente
+        try {
+            const relatorio = await NeonAPI.getRelatorioCompleto();
+            
+            const totalProdutos = relatorio?.totalProdutos || 0;
+            const totalVendas = relatorio?.totalVendas || 0;
+            const totalFaturamento = relatorio?.totalFaturamento || 0;
+            
+            document.getElementById('totalProducts').innerText = totalProdutos;
+            document.getElementById('totalSales').innerText = totalVendas;
+            document.getElementById('totalRevenue').innerText = `R$ ${formatPrice(totalFaturamento)}`;
+            
+        } catch (error) {
+            console.error('Erro ao carregar configurações:', error);
+            document.getElementById('totalProducts').innerText = '0';
+            document.getElementById('totalSales').innerText = '0';
+            document.getElementById('totalRevenue').innerText = 'R$ 0,00';
+        }
     }
-};
+});
 
 // Tornar o sistema disponível globalmente
 window.chopManager = ChopManager;
@@ -381,3 +397,45 @@ window.navigateTo = function(pageId) {
 window.syncData = function() {
     ChopManager.syncData();
 };
+
+// Backup de dados
+window.backupData = async function() {
+    try {
+        showNotification('🔄 Gerando backup...', 'info');
+        
+        const [produtosData, vendasData] = await Promise.all([
+            NeonAPI.getProdutos(),
+            NeonAPI.getVendasPeriodo('2024-01-01', new Date().toISOString().split('T')[0])
+        ]);
+        
+        const backup = {
+            produtos: produtosData,
+            vendas: vendasData,
+            timestamp: new Date().toISOString(),
+            totalProdutos: Array.isArray(produtosData) ? produtosData.length : 0,
+            totalVendas: Array.isArray(vendasData) ? vendasData.length : 0,
+            totalFaturamento: Array.isArray(vendasData) ? vendasData.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0) : 0
+        };
+        
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup_neon_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('✅ Backup gerado com sucesso!', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao gerar backup:', error);
+        showNotification('❌ Erro ao gerar backup', 'error');
+    }
+};
+
+// Event listener para botão de backup
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('backupBtn')?.addEventListener('click', backupData);
+});
