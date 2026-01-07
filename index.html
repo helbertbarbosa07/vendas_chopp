@@ -1,28 +1,28 @@
 <!DOCTYPE html>
-<html lang="pt-BR"> 
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🍦 Chop Manager PRO - Sistema Completo</title>
     
-    <!-- Font Awesome -->
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- PDF Generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <!-- CSS Files -->
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/vendas.css">
     <link rel="stylesheet" href="css/produtos.css">
-    <link rel="stylesheet" href="css/fiados.css">
-    <link rel="stylesheet" href="css/relatorios.css">
     <link rel="stylesheet" href="css/modals.css">
+    <link rel="stylesheet" href="css/payment.css">
+    <link rel="stylesheet" href="css/notifications.css">
+    <link rel="stylesheet" href="css/relatorios.css">
+    <link rel="stylesheet" href="css/fiados.css">
+    <link rel="stylesheet" href="css/config.css">
+    <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
     <div class="app-container">
@@ -32,17 +32,21 @@
                 <div class="logo-icon">🍦</div>
                 <div class="logo-text">
                     <h1>CHOP <span>MANAGER</span> PRO</h1>
-                    <div class="logo-subtitle">Sistema Completo de Vendas</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Sistema Completo de Vendas</div>
                 </div>
             </div>
             
-            <div class="header-right">
+            <div style="display: flex; align-items: center; gap: 20px;">
                 <div class="day-info">
-                    <div id="currentDate" class="current-date">Carregando...</div>
-                    <div id="currentTime" class="current-time">00:00:00</div>
+                    <div id="currentDate" style="font-size: 16px; margin-bottom: 5px;">Carregando...</div>
+                    <div id="currentTime" style="font-size: 24px; font-weight: 800; color: var(--accent);">00:00:00</div>
                 </div>
                 
-                <button onclick="syncData()" id="syncButton" class="sync-btn">
+                <button id="syncButton" class="btn-primary" style="
+                    background: linear-gradient(135deg, var(--secondary), #FF4081);
+                    padding: 10px 18px; 
+                    font-size: 13px;
+                    white-space: nowrap;">
                     <i class="fas fa-sync-alt"></i> Sincronizar
                 </button>
             </div>
@@ -114,14 +118,18 @@
                 </div>
                 
                 <!-- GRÁFICOS -->
-                <div class="charts-grid">
-                    <div class="chart-container">
-                        <h3><i class="fas fa-chart-pie"></i> Produtos Mais Vendidos</h3>
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <h3 class="chart-title">
+                            <i class="fas fa-chart-pie"></i> Produtos Mais Vendidos
+                        </h3>
                         <canvas id="flavorsChart" height="200"></canvas>
                     </div>
                     
-                    <div class="chart-container">
-                        <h3><i class="fas fa-chart-line"></i> Evolução Semanal</h3>
+                    <div class="chart-card">
+                        <h3 class="chart-title">
+                            <i class="fas fa-chart-line"></i> Evolução Semanal
+                        </h3>
                         <canvas id="weeklyChart" height="200"></canvas>
                     </div>
                 </div>
@@ -130,9 +138,9 @@
                 <div class="dashboard-grid">
                     <!-- ÚLTIMAS VENDAS -->
                     <div class="recent-sales-container">
-                        <div class="section-header">
+                        <div class="sales-header">
                             <h3><i class="fas fa-history"></i> Últimas Vendas</h3>
-                            <button class="btn-primary btn-small" id="btnVerTodas">
+                            <button class="btn-primary" id="btnVerTodas">
                                 Ver Todas
                             </button>
                         </div>
@@ -144,9 +152,9 @@
                     
                     <!-- PRODUTOS MAIS VENDIDOS -->
                     <div class="top-products-container">
-                        <div class="section-header">
+                        <div class="sales-header">
                             <h3><i class="fas fa-crown"></i> Top Produtos</h3>
-                            <button class="btn-primary btn-small" id="btnVerTodosProdutos">
+                            <button class="btn-primary" id="btnVerTodosProdutos">
                                 Ver Todos
                             </button>
                         </div>
@@ -158,10 +166,10 @@
                 </div>
                 
                 <!-- ESTOQUE BAIXO -->
-                <div class="low-stock-container" id="lowStockContainer">
-                    <div class="section-header">
+                <div class="low-stock-container" id="lowStockContainer" style="display: none;">
+                    <div class="sales-header">
                         <h3><i class="fas fa-exclamation-triangle"></i> Estoque Baixo</h3>
-                        <button class="btn-primary btn-small btn-warning" id="btnReporEstoque">
+                        <button class="btn-primary" id="btnReporEstoque">
                             Repor Estoque
                         </button>
                     </div>
@@ -181,9 +189,11 @@
                 
                 <!-- PRODUTOS -->
                 <div>
-                    <h3 class="section-title"><i class="fas fa-ice-cream"></i> Selecione os Produtos</h3>
+                    <h3 style="margin: 15px 0; color: var(--dark); font-size: 20px;">
+                        <i class="fas fa-ice-cream"></i> Selecione os Produtos
+                    </h3>
                     <div class="flavors-grid" id="productsGrid">
-                        <div class="loading">
+                        <div class="loading" style="grid-column: 1 / -1;">
                             <i class="fas fa-spinner fa-spin"></i>
                             <p>Carregando produtos...</p>
                         </div>
@@ -193,14 +203,16 @@
                 <!-- CARRINHO -->
                 <div class="cart-container">
                     <div class="cart-header">
-                        <h3><i class="fas fa-shopping-cart"></i> Carrinho</h3>
-                        <button class="btn-primary btn-danger" id="clearCart">
+                        <h3 class="cart-title">
+                            <i class="fas fa-shopping-cart"></i> Carrinho
+                        </h3>
+                        <button class="btn-primary" style="background: var(--danger);" id="clearCart">
                             <i class="fas fa-trash"></i> Limpar
                         </button>
                     </div>
                     
-                    <div id="cartItems" class="cart-items">
-                        <div class="empty-cart">
+                    <div class="cart-items-container" id="cartItems">
+                        <div class="loading">
                             <i class="fas fa-shopping-cart"></i>
                             <p>Selecione os produtos para começar</p>
                         </div>
@@ -222,8 +234,10 @@
                     </div>
                     
                     <!-- FORMAS DE PAGAMENTO -->
-                    <div class="payment-section">
-                        <h4><i class="fas fa-credit-card"></i> Forma de Pagamento</h4>
+                    <div style="margin: 20px 0;">
+                        <h4 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
+                            <i class="fas fa-credit-card"></i> Forma de Pagamento
+                        </h4>
                         <div class="payment-options">
                             <label class="payment-option">
                                 <input type="radio" name="payment" value="dinheiro" checked>
@@ -259,7 +273,7 @@
                         </div>
                     </div>
                     
-                    <button class="btn-primary btn-large" id="finalizeSale" disabled>
+                    <button class="btn-primary" id="finalizeSale" disabled style="width: 100%;">
                         <i class="fas fa-check-circle"></i>
                         FINALIZAR VENDA
                     </button>
@@ -273,20 +287,22 @@
                     <h2>Gestão de Produtos</h2>
                 </div>
                 
-                <div class="page-header">
-                    <p>Cadastre e gerencie seus produtos</p>
-                    <button class="btn-primary" id="addProduct">
+                <div class="add-product-container">
+                    <p style="color: var(--gray); font-size: 16px;">
+                        Cadastre e gerencie seus produtos
+                    </p>
+                    <button class="add-product-btn" id="addProduct">
                         <i class="fas fa-plus"></i>
                         Novo Produto
                     </button>
                 </div>
                 
                 <!-- FILTROS DE PRODUTOS -->
-                <div class="filters-container">
-                    <div class="filters-row">
-                        <div>
-                            <label>Filtrar por:</label>
-                            <select id="productFilter">
+                <div class="products-filter">
+                    <div class="filter-container">
+                        <div class="filter-group">
+                            <label class="filter-label">Filtrar por:</label>
+                            <select id="productFilter" class="filter-select">
                                 <option value="todos">Todos os Produtos</option>
                                 <option value="estoque-baixo">Estoque Baixo</option>
                                 <option value="mais-vendidos">Mais Vendidos</option>
@@ -295,14 +311,15 @@
                             </select>
                         </div>
                         
-                        <div class="search-container">
-                            <input type="text" id="productSearch" placeholder="Buscar produto...">
+                        <div class="filter-group">
+                            <label class="filter-label">Buscar:</label>
+                            <input type="text" id="productSearch" class="filter-search" placeholder="Buscar produto...">
                         </div>
                     </div>
                 </div>
                 
                 <div class="products-grid" id="productsList">
-                    <div class="loading">
+                    <div class="loading" style="grid-column: 1 / -1;">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando produtos...</p>
                     </div>
@@ -316,17 +333,19 @@
                     <h2>Controle de Fiados</h2>
                 </div>
                 
-                <div class="page-header">
-                    <p>Gerencie vendas fiadas e recebimentos</p>
-                    <button class="btn-primary" id="novoFiado">
+                <div class="add-product-container">
+                    <p style="color: var(--gray); font-size: 16px;">
+                        Gerencie vendas fiadas e recebimentos
+                    </p>
+                    <button class="novo-fiado-btn" id="novoFiado">
                         <i class="fas fa-plus"></i>
                         Novo Fiado
                     </button>
                 </div>
                 
                 <!-- RESUMO DE FIADOS -->
-                <div class="stats-grid">
-                    <div class="stat-card">
+                <div class="fiados-summary">
+                    <div class="fiado-stat-card receber">
                         <div class="stat-label">Total a Receber</div>
                         <div class="stat-value" id="totalReceber">R$ 0,00</div>
                         <div class="stat-icon">
@@ -334,7 +353,7 @@
                         </div>
                     </div>
                     
-                    <div class="stat-card">
+                    <div class="fiado-stat-card recebido">
                         <div class="stat-label">Recebido Mês</div>
                         <div class="stat-value" id="recebidoMes">R$ 0,00</div>
                         <div class="stat-icon">
@@ -342,7 +361,7 @@
                         </div>
                     </div>
                     
-                    <div class="stat-card">
+                    <div class="fiado-stat-card atraso">
                         <div class="stat-label">Clientes em Atraso</div>
                         <div class="stat-value" id="clientesAtraso">0</div>
                         <div class="stat-icon">
@@ -350,7 +369,7 @@
                         </div>
                     </div>
                     
-                    <div class="stat-card">
+                    <div class="fiado-stat-card ativos">
                         <div class="stat-label">Fiados Ativos</div>
                         <div class="stat-value" id="fiadosAtivos">0</div>
                         <div class="stat-icon">
@@ -360,11 +379,11 @@
                 </div>
                 
                 <!-- FILTROS -->
-                <div class="filters-container">
-                    <div class="filters-row">
-                        <div>
-                            <label>Status:</label>
-                            <select id="filterStatus">
+                <div class="fiados-filter">
+                    <div class="fiados-filter-row">
+                        <div class="filter-group">
+                            <label class="filter-label">Status:</label>
+                            <select id="filterStatus" class="filter-select">
                                 <option value="todos">Todos</option>
                                 <option value="pendente">Pendentes</option>
                                 <option value="atrasado">Em Atraso</option>
@@ -373,8 +392,9 @@
                             </select>
                         </div>
                         
-                        <div class="search-container">
-                            <input type="text" id="searchCliente" placeholder="Buscar cliente...">
+                        <div class="filter-group">
+                            <label class="filter-label">Buscar cliente:</label>
+                            <input type="text" id="searchCliente" class="fiados-search" placeholder="Buscar cliente...">
                         </div>
                         
                         <button class="btn-primary" id="btnExportFiados">
@@ -384,7 +404,7 @@
                 </div>
                 
                 <!-- LISTA DE FIADOS -->
-                <div class="fiados-container">
+                <div class="cart-container">
                     <div id="fiadosList" class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando fiados...</p>
@@ -400,11 +420,11 @@
                 </div>
                 
                 <!-- FILTROS -->
-                <div class="filters-container">
-                    <div class="filters-row">
-                        <div>
-                            <label>Período:</label>
-                            <select id="reportPeriod">
+                <div class="reports-filter">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label class="filter-label">Período:</label>
+                            <select id="reportPeriod" class="filter-select">
                                 <option value="hoje">Hoje</option>
                                 <option value="ontem">Ontem</option>
                                 <option value="semana">Esta Semana</option>
@@ -414,20 +434,20 @@
                             </select>
                         </div>
                         
-                        <div id="customDateRange" class="date-range-container">
+                        <div id="customDateRange" class="custom-date-range">
                             <div class="date-inputs">
-                                <div>
-                                    <label>De:</label>
-                                    <input type="date" id="startDate">
+                                <div class="filter-group">
+                                    <label class="filter-label">De:</label>
+                                    <input type="date" id="startDate" class="filter-input">
                                 </div>
-                                <div>
-                                    <label>Até:</label>
-                                    <input type="date" id="endDate">
+                                <div class="filter-group">
+                                    <label class="filter-label">Até:</label>
+                                    <input type="date" id="endDate" class="filter-input">
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="generate-btn">
+                        <div style="margin-left: auto;">
                             <button class="btn-primary" id="generateReportBtn">
                                 <i class="fas fa-sync-alt"></i>
                                 Gerar Relatório
@@ -446,9 +466,9 @@
                 
                 <!-- CONTEÚDO DO RELATÓRIO -->
                 <div id="reportContent" class="report-content">
-                    <div class="report-placeholder">
-                        <i class="fas fa-chart-pie"></i>
-                        <p>Selecione um período e clique em "Gerar Relatório"</p>
+                    <div style="text-align: center; padding: 40px 20px; color: var(--gray);">
+                        <i class="fas fa-chart-pie" style="font-size: 60px; margin-bottom: 15px; opacity: 0.3;"></i>
+                        <p style="font-size: 16px;">Selecione um período e clique em "Gerar Relatório"</p>
                     </div>
                 </div>
             </section>
@@ -463,9 +483,16 @@
                 <div class="config-grid">
                     <!-- BACKUP -->
                     <div class="config-card">
-                        <h3><i class="fas fa-database"></i> Backup de Dados</h3>
-                        <p>Faça backup de todos os dados do sistema.</p>
-                        <button class="btn-primary" id="backupBtn">
+                        <h3 class="config-card-header">
+                            <i class="fas fa-database"></i> Backup de Dados
+                        </h3>
+                        <div class="config-card-body">
+                            <p>Faça backup de todos os dados do sistema.</p>
+                            <div class="backup-info">
+                                <i class="fas fa-info-circle"></i> Último backup: Nenhum
+                            </div>
+                        </div>
+                        <button class="config-btn primary" id="backupBtn">
                             <i class="fas fa-save"></i>
                             Fazer Backup
                         </button>
@@ -473,12 +500,28 @@
                     
                     <!-- INFORMAÇÕES -->
                     <div class="config-card">
-                        <h3><i class="fas fa-info-circle"></i> Informações do Sistema</h3>
-                        <div class="system-info">
-                            <p><strong>Versão:</strong> Chop Manager PRO 2.1</p>
-                            <p><strong>Produtos:</strong> <span id="totalProducts">0</span></p>
-                            <p><strong>Vendas:</strong> <span id="totalSales">0</span></p>
-                            <p><strong>Faturamento Total:</strong> <span id="totalRevenue">R$ 0,00</span></p>
+                        <h3 class="config-card-header">
+                            <i class="fas fa-info-circle"></i> Informações do Sistema
+                        </h3>
+                        <div class="config-card-body">
+                            <div class="system-info">
+                                <div class="info-item">
+                                    <span class="info-label">Versão:</span>
+                                    <span class="info-value">Chop Manager PRO 2.1</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Produtos:</span>
+                                    <span class="info-value" id="totalProducts">0</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Vendas:</span>
+                                    <span class="info-value" id="totalSales">0</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Faturamento Total:</span>
+                                    <span class="info-value" id="totalRevenue">R$ 0,00</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -488,7 +531,9 @@
         <!-- FOOTER -->
         <footer class="footer">
             <p>🍦 Sistema Chop Manager PRO - Versão 2.1</p>
-            <p>Sistema completo para gestão de vendas de sorvete</p>
+            <p style="margin-top: 8px; font-size: 12px; opacity: 0.8;">
+                Sistema completo para gestão de vendas de sorvete
+            </p>
         </footer>
     </div>
     
@@ -500,7 +545,7 @@
                     <i class="fas fa-ice-cream"></i>
                     <span id="modalTitle">Novo Produto</span>
                 </div>
-                <button id="closeModal" class="modal-close">&times;</button>
+                <button id="closeModal" class="close-modal">&times;</button>
             </div>
             
             <div class="modal-body">
@@ -514,11 +559,11 @@
                             <div class="upload-icon">
                                 <i class="fas fa-camera"></i>
                             </div>
-                            <p>Clique para adicionar uma foto</p>
-                            <p>Formatos: JPG, PNG (max. 2MB)</p>
+                            <p class="upload-text">Clique para adicionar uma foto</p>
+                            <p class="upload-subtext">Formatos: JPG, PNG (max. 2MB)</p>
                             <img id="photoPreview" class="photo-preview" alt="Preview da foto">
                         </div>
-                        <input type="file" id="productPhoto" accept="image/*">
+                        <input type="file" id="productPhoto" accept="image/*" style="display: none;">
                         <input type="hidden" id="productPhotoData">
                     </div>
                     
@@ -529,7 +574,7 @@
                     
                     <div class="form-group">
                         <label class="form-label">Descrição</label>
-                        <textarea id="productDescription" class="form-input" rows="2" placeholder="Descreva o produto..."></textarea>
+                        <textarea id="productDescription" class="form-input form-textarea" rows="2" placeholder="Descreva o produto..."></textarea>
                     </div>
                     
                     <div class="form-group">
@@ -546,8 +591,8 @@
                     <div class="form-group">
                         <label class="form-label">Emoji do Produto</label>
                         <div class="emoji-selected" id="emojiSelector">
-                            <span id="selectedEmoji">🍦</span>
-                            <span>Clique para escolher um emoji</span>
+                            <div class="selected-emoji" id="selectedEmoji">🍦</div>
+                            <div class="emoji-instruction">Clique para escolher um emoji</div>
                         </div>
                         <div class="emoji-picker" id="emojiPicker">
                             <!-- Emojis serão inseridos por JavaScript -->
@@ -560,145 +605,22 @@
                         <input type="color" id="productColor" value="#36B5B0" class="color-input">
                     </div>
                     
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="productActive" checked>
-                        <label for="productActive">Produto Ativo</label>
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="productActive" checked class="checkbox-input">
+                            <span class="custom-checkbox"></span>
+                            <span class="checkbox-label">Produto Ativo</span>
+                        </label>
                     </div>
                 </form>
             </div>
             
             <div class="modal-footer">
-                <button class="btn-secondary" id="cancelModal">
+                <button id="cancelModal" class="btn-primary" style="background: var(--gray);">
                     Cancelar
                 </button>
-                <button class="btn-primary" id="saveProduct">
+                <button id="saveProduct" class="btn-primary">
                     Salvar Produto
-                </button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- MODAL FIADO -->
-    <div class="modal-overlay" id="fiadoModal">
-        <div class="modal modal-lg">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <i class="fas fa-hand-holding-usd"></i>
-                    <span id="modalFiadoTitle">Novo Fiado</span>
-                </div>
-                <button id="closeFiadoModal" class="modal-close">&times;</button>
-            </div>
-            
-            <div class="modal-body">
-                <form id="fiadoForm">
-                    <input type="hidden" id="fiadoIndex">
-                    
-                    <div class="form-group">
-                        <label class="form-label">Nome do Cliente *</label>
-                        <input type="text" id="nomeCliente" class="form-input" placeholder="Nome completo" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Telefone</label>
-                        <input type="text" id="telefoneCliente" class="form-input" placeholder="(11) 99999-9999">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Produtos *</label>
-                        <div id="produtosFiadoContainer">
-                            <!-- Produtos serão adicionados dinamicamente -->
-                        </div>
-                        <button type="button" class="btn-primary btn-small" id="addProdutoFiado">
-                            <i class="fas fa-plus"></i> Adicionar Produto
-                        </button>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Prazo de Pagamento *</label>
-                        <input type="date" id="prazoPagamento" class="form-input" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Data de Retirada</label>
-                        <input type="date" id="dataRetirada" class="form-input">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Valor Pago Inicial (se houver)</label>
-                        <input type="number" id="valorPago" class="form-input" step="0.01" min="0" value="0">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Observações</label>
-                        <textarea id="observacoes" class="form-input" rows="3" placeholder="Observações importantes..."></textarea>
-                    </div>
-                    
-                    <div class="form-summary">
-                        <div>
-                            <span>Total:</span>
-                            <span id="fiadoTotal">R$ 0,00</span>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            
-            <div class="modal-footer">
-                <button class="btn-secondary" id="cancelFiadoModal">
-                    Cancelar
-                </button>
-                <button class="btn-primary" id="saveFiado">
-                    Salvar Fiado
-                </button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- MODAL PAGAMENTO FIADO -->
-    <div class="modal-overlay" id="pagamentoModal">
-        <div class="modal">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <i class="fas fa-money-bill-wave"></i>
-                    <span>Registrar Pagamento</span>
-                </div>
-                <button onclick="fecharPagamentoModal()" class="modal-close">&times;</button>
-            </div>
-            
-            <div class="modal-body">
-                <div id="pagamentoInfo" class="payment-info"></div>
-                
-                <div class="form-group">
-                    <label class="form-label">Valor do Pagamento *</label>
-                    <input type="number" id="valorPagamento" class="form-input" step="0.01" min="0" placeholder="0.00" required>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Data do Pagamento</label>
-                    <input type="date" id="dataPagamento" class="form-input">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Forma de Pagamento</label>
-                    <select id="formaPagamento" class="form-input">
-                        <option value="dinheiro">Dinheiro</option>
-                        <option value="pix">PIX</option>
-                        <option value="cartao">Cartão</option>
-                        <option value="transferencia">Transferência</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Observações</label>
-                    <textarea id="obsPagamento" class="form-input" rows="2" placeholder="Observações sobre o pagamento..."></textarea>
-                </div>
-            </div>
-            
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="fecharPagamentoModal()">
-                    Cancelar
-                </button>
-                <button class="btn-primary" onclick="confirmarPagamento()">
-                    Registrar Pagamento
                 </button>
             </div>
         </div>
@@ -706,122 +628,15 @@
     
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
-    
-    <!-- Importação de todos os módulos JavaScript -->
+
+    <!-- JavaScript Files -->
     <script src="js/utils.js"></script>
     <script src="js/neon-api.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/dashboard.js"></script>
     <script src="js/vendas.js"></script>
     <script src="js/produtos.js"></script>
     <script src="js/fiados.js"></script>
     <script src="js/relatorios.js"></script>
-    
-    <script>
-        // Inicialização global
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Sistema Chop Manager PRO iniciando...');
-            
-            // Inicializar funções principais
-            if (typeof initMain === 'function') {
-                initMain();
-            }
-            
-            // Inicializar navegação
-            if (typeof setupNavigation === 'function') {
-                setupNavigation();
-            }
-            
-            // Inicializar eventos
-            if (typeof setupEventListeners === 'function') {
-                setupEventListeners();
-            }
-            
-            // Inicializar data/hora
-            if (typeof updateDateTime === 'function') {
-                updateDateTime();
-                setInterval(updateDateTime, 1000);
-            }
-            
-            // Testar conexão com Neon
-            if (typeof testConnection === 'function') {
-                setTimeout(() => {
-                    testConnection().then(isConnected => {
-                        if (isConnected) {
-                            console.log('✅ Sistema Neon conectado com sucesso!');
-                        }
-                    });
-                }, 1000);
-            }
-        });
-        
-        // Variáveis globais acessíveis por todos os módulos
-        window.globals = {
-            produtos: [],
-            vendas: [],
-            fiados: [],
-            carrinho: [],
-            charts: {},
-            isLoading: false,
-            API_URL: 'https://helbertbarbosa07-vendaschopp.vercel.app/api/neon'
-        };
-        
-        // Funções globais que conectam os módulos
-        window.navigateTo = function(pageId) {
-            const tab = document.querySelector(`.nav-tab[data-page="${pageId}"]`);
-            if (tab) {
-                tab.click();
-            }
-        };
-        
-        window.syncData = async function() {
-            try {
-                showNotification('🔄 Sincronizando com Neon...', 'info');
-                
-                // Recarregar todos os módulos
-                if (typeof loadDashboard === 'function') await loadDashboard();
-                if (typeof loadProductsForSale === 'function') await loadProductsForSale();
-                if (typeof loadProductsList === 'function') await loadProductsList();
-                if (typeof carregarFiados === 'function') await carregarFiados();
-                
-                showNotification('✅ Dados sincronizados!', 'success');
-                
-            } catch (error) {
-                console.error('Erro na sincronização:', error);
-                showNotification('❌ Erro na sincronização', 'error');
-            }
-        };
-        
-        // Funções de compatibilidade
-        window.addToCart = function(produtoId) {
-            if (typeof addToCart === 'function') {
-                addToCart(produtoId);
-            }
-        };
-        
-        window.updateCartItem = function(index, change) {
-            if (typeof updateCartItem === 'function') {
-                updateCartItem(index, change);
-            }
-        };
-        
-        window.removeCartItem = function(index) {
-            if (typeof removeCartItem === 'function') {
-                removeCartItem(index);
-            }
-        };
-        
-        window.editProduct = function(id) {
-            if (typeof editProduct === 'function') {
-                editProduct(id);
-            }
-        };
-        
-        window.deleteProduct = function(id) {
-            if (typeof deleteProduct === 'function') {
-                deleteProduct(id);
-            }
-        };
-    </script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>
