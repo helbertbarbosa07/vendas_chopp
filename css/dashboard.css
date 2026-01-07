@@ -33,9 +33,6 @@
     font-size: 14px;
     color: var(--gray);
     margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
 .stat-value {
@@ -76,13 +73,7 @@
     margin-top: 20px;
 }
 
-@media (max-width: 1024px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* ===== ÚLTIMAS VENDAS ===== */
+/* Recent Sales */
 .recent-sales-container {
     background: white;
     border-radius: 20px;
@@ -154,24 +145,18 @@
     color: #7b1fa2;
 }
 
-.empty-sales {
-    text-align: center;
-    padding: 30px 20px;
-    color: var(--gray);
+.payment-fiado {
+    background: #fff3e0;
+    color: #ef6c00;
 }
 
-.empty-sales i {
-    font-size: 40px;
-    margin-bottom: 10px;
-    opacity: 0.3;
-}
-
-/* ===== TOP PRODUTOS ===== */
+/* Top Products */
 .top-products-container {
     background: white;
     border-radius: 20px;
     padding: 20px;
     box-shadow: var(--shadow);
+    margin-top: 30px;
 }
 
 .top-products-list {
@@ -232,7 +217,7 @@
     margin-left: 10px;
 }
 
-/* ===== ESTOQUE BAIXO ===== */
+/* Low Stock */
 .low-stock-container {
     background: white;
     border-radius: 20px;
@@ -288,4 +273,44 @@
     color: var(--warning);
     font-size: 18px;
     margin-left: 10px;
+}
+
+/* Empty States */
+.empty-sales {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--gray);
+}
+
+.empty-sales i {
+    font-size: 40px;
+    margin-bottom: 10px;
+    opacity: 0.3;
+}
+
+.empty-sales p {
+    margin: 0;
+}
+
+/* Responsividade Dashboard */
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .charts-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .top-products-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .low-stock-list {
+        grid-template-columns: 1fr;
+    }
 }
