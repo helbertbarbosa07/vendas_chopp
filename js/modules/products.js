@@ -3,7 +3,7 @@ import { state } from '../state.js'
 import { neonAPI } from '../api.js'
 
 export async function carregarProdutos() {
-  const dados = await neonAPI('getProducts')
+  const dados = await neonAPI('getProducts') 
   state.produtos = dados || []
   return state.produtos
 }
