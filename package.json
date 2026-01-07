@@ -1,40 +1,16 @@
 {
   "name": "chop-manager-neon",
   "version": "2.1.0",
-  "description": "Sistema de gerenciamento de vendas de sorvete com Neon PostgreSQL",
+  "description": "Sistema de gerenciamento de vendas de sorvete",
   "main": "api/neon.js",
-  "engines": {
-    "node": ">=16.0.0"
-  },
   "scripts": {
     "start": "node api/neon.js",
-    "dev": "nodemon api/neon.js",
-    "test": "node test-neon.js",
-    "setup-db": "node setup-database.js"
+    "dev": "vercel dev"
   },
   "dependencies": {
-    "pg": "^8.11.3",
-    "dotenv": "^16.3.1"
+    "@neondatabase/serverless": "^0.9.0"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "keywords": [
-    "chop-manager",
-    "sorvete",
-    "vendas",
-    "neon",
-    "postgresql",
-    "gestao-comercial"
-  ],
-  "author": "Seu Nome <seu@email.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/seuusuario/chop-manager-neon.git"
-  },
-  "bugs": {
-    "url": "https://github.com/seuusuario/chop-manager-neon/issues"
-  },
-  "homepage": "https://github.com/seuusuario/chop-manager-neon#readme"
+  "engines": {
+    "node": ">=18.x"
+  }
 }
