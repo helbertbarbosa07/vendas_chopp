@@ -3172,6 +3172,11 @@ window.debugConnection = async function() {
         console.error('❌ Debug falhou:', error);
     }
 };
+    function atualizarBotaoVenda() {
+    const btn = document.getElementById('finalizeSale');
+    if (btn) btn.disabled = carrinho.length === 0;
+}
+
 </script>
 </body>
 </html> 
