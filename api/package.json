@@ -1,12 +1,8 @@
+
 {
   "name": "chop-manager-neon",
   "version": "2.1.0",
-  "description": "Sistema de gerenciamento de vendas de sorvete",
-  "main": "api/neon.js",
-  "scripts": {
-    "start": "node api/neon.js",
-    "dev": "vercel dev"
-  },
+  "private": true,
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0"
   },
