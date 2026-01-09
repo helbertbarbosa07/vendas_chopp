@@ -1728,13 +1728,7 @@ async function finalizeSale() {
         // Salvar venda
         await neonAPI('create_venda', vendaData);
         
-        // Atualizar estoque para cada produto
-        for (const item of carrinho) {
-            await neonAPI('update_estoque', {
-                produtoId: item.produtoId,
-                quantidade: -item.quantidade // Negativo para diminuir estoque
-            });
-        }
+        
         
         // Limpar carrinho
         carrinho = [];
@@ -1761,6 +1755,29 @@ async function finalizeSale() {
     } catch (error) {
         console.error('Erro ao finalizar venda:', error);
         showNotification('❌ Erro ao finalizar venda: ' + error.message, 'error');
+    }
+}
+//dash
+    async function loadDashboard() {
+    try {
+        const stats = await neonAPI('get_dashboard_stats');
+
+        document.getElementById('todayRevenue').textContent =
+            `R$ ${formatPrice(stats.faturamentoHoje)}`;
+
+        document.getElementById('todayChops').textContent =
+            stats.totalItens;
+
+        document.getElementById('avgSale').textContent =
+            stats.totalVendas > 0
+                ? `R$ ${formatPrice(stats.faturamentoHoje / stats.totalVendas)}`
+                : 'R$ 0,00';
+
+        document.getElementById('lowStock').textContent =
+            stats.estoqueBaixo;
+
+    } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
     }
 }
 
@@ -2242,7 +2259,8 @@ async function loadReports() {
         `;
         
         // Simples relatório básico
-        const vendasHoje = await neonAPI('get_vendas_hoje');
+        const vendasHoje = await neonAPI('get_vendas_recentes');
+
         const produtosList = await neonAPI('get_produtos');
         
         const totalVendas = Array.isArray(vendasHoje) ? vendasHoje.length : 0;
