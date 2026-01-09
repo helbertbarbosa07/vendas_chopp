@@ -1696,7 +1696,7 @@ async function finalizeSale() {
         
         const formaPagamento = document.querySelector('input[name="payment"]:checked')?.value || 'dinheiro';
         const total = carrinho.reduce((sum, item) => sum + (item.total || 0), 0);
-        const totalItems = carrinho.reduce((sum, item) => sum + (item.quantidade || 0), 0);
+        const totalItens = carrinho.reduce((sum, item) => sum + (item.quantidade || 0), 0);
         
         // Se for fiado, abrir modal de fiado
         if (formaPagamento === 'fiado') {
@@ -1705,20 +1705,23 @@ async function finalizeSale() {
         }
         
         // Para pagamentos normais
-        const vendaData = {
-            data: new Date().toISOString().split('T')[0],
-            hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            itens: carrinho.map(item => ({
-                produto_id: item.produtoId,
-                nome: item.nome,
-                quantidade: item.quantidade,
-                preco: item.preco
-            })),
-            total: total,
-            total_items: totalItems, // ADICIONADO ESTE CAMPO
-            pagamento: formaPagamento,
-            status: 'concluida'
-        };
+      const vendaData = {
+      data: new Date().toISOString().split('T')[0],
+      hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+
+      total: total,
+      total_itens: totalItens, // ✅ NOME EXATO DO BANCO
+
+       pagamento: formaPagamento,
+       status: 'concluida',
+
+       itens: carrinho.map(item => ({
+       produto_id: item.produtoId,
+       quantidade: item.quantidade,
+       preco: item.preco
+    }))
+};
+
         
         console.log('📦 Enviando venda para API:', vendaData);
         
