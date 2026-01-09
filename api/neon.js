@@ -82,33 +82,59 @@ export default async function handler(req, res) {
                 result = { success: true };
                 break;
 
-            case 'create_venda':
-                // Criar venda principal
-                const vendaResult = await sql`
-                    INSERT INTO vendas (data, hora, total, pagamento)
-                    VALUES (${data.data}, ${data.hora}, ${data.total}, ${data.pagamento})
-                    RETURNING id
-                `;
-                
-                const vendaId = vendaResult[0].id;
-                
-                // Inserir itens da venda
-                for (const item of data.itens) {
-                    await sql`
-                        INSERT INTO venda_itens (venda_id, produto_id, nome, quantidade, preco)
-                        VALUES (${vendaId}, ${item.produtoId}, ${item.nome}, ${item.quantidade}, ${item.preco})
-                    `;
-                    
-                    // Atualizar estoque
-                    await sql`
-                        UPDATE produtos 
-                        SET estoque = estoque - ${item.quantidade}
-                        WHERE id = ${item.produtoId}
-                    `;
-                }
-                
-                result = { success: true, vendaId };
-                break;
+            case 'create_venda': {
+    const {
+        data: dataVenda,
+        hora,
+        total,
+        total_itens,
+        pagamento,
+        status,
+        itens
+    } = data;
+
+    // Segurança extra
+    const totalItensSeguro = total_itens ?? 0;
+
+    // Criar venda principal
+    const vendaResult = await sql`
+        INSERT INTO vendas (data, hora, total, total_itens, pagamento, status)
+        VALUES (
+            ${dataVenda},
+            ${hora},
+            ${total},
+            ${totalItensSeguro},
+            ${pagamento},
+            ${status}
+        )
+        RETURNING id
+    `;
+
+    const vendaId = vendaResult[0].id;
+
+    // Inserir itens da venda
+    for (const item of itens) {
+        await sql`
+            INSERT INTO venda_itens (venda_id, produto_id, quantidade, preco)
+            VALUES (
+                ${vendaId},
+                ${item.produto_id},
+                ${item.quantidade},
+                ${item.preco}
+            )
+        `;
+
+        // Atualizar estoque
+        await sql`
+            UPDATE produtos
+            SET estoque = estoque - ${item.quantidade}
+            WHERE id = ${item.produto_id}
+        `;
+    }
+
+    result = { success: true, vendaId };
+    break;
+}
 
             case 'get_vendas_recentes':
                 result = await sql`
