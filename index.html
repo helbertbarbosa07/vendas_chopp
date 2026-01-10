@@ -1035,8 +1035,19 @@ async function loadUltimasVendas() {
     }
 }
 
-async function loadProdutosMaisVendidos() {
+
+async function loadEstoqueBaixo() {
     try {
+        const produtosAPI = await neonAPI('get_produtos');
+        const container = document.getElementById('lowStockContainer');
+        const lista = document.getElementById('lowStockList');
+        
+        if (!Array.isArray(produtosAPI)) {
+            container.style.display = 'none';
+            return;async function loadProdutosMaisVendidos() {
+    try {
+        // Primeiro, pegar as vendas reais para calcular
+        const vendasAPI = await neonAPI('get_vendas_recentes');
         const produtosAPI = await neonAPI('get_produtos');
         const lista = document.getElementById('topProductsList');
         
@@ -1050,32 +1061,51 @@ async function loadProdutosMaisVendidos() {
             return;
         }
         
-        // Filtrar produtos ativos
-        const produtosAtivos = produtosAPI.filter(p => p.ativo);
+        // Calcular vendas reais a partir das transações
+        const vendasPorProduto = {};
         
-        if (produtosAtivos.length === 0) {
+        if (Array.isArray(vendasAPI) && vendasAPI.length > 0) {
+            vendasAPI.forEach(venda => {
+                if (venda.itens && Array.isArray(venda.itens)) {
+                    venda.itens.forEach(item => {
+                        const produtoId = item.produto_id;
+                        const quantidade = item.quantidade || 0;
+                        
+                        if (!vendasPorProduto[produtoId]) {
+                            vendasPorProduto[produtoId] = 0;
+                        }
+                        vendasPorProduto[produtoId] += quantidade;
+                    });
+                }
+            });
+        }
+        
+        // Filtrar produtos ativos e mapear com vendas reais
+        const produtosComVendas = produtosAPI
+            .filter(p => p.ativo)
+            .map(produto => {
+                return {
+                    ...produto,
+                    vendas_reais: vendasPorProduto[produto.id] || 0
+                };
+            })
+            .sort((a, b) => b.vendas_reais - a.vendas_reais)
+            .slice(0, 5); // Top 5
+        
+        if (produtosComVendas.length === 0) {
             lista.innerHTML = `
                 <div style="text-align: center; padding: 20px; color: var(--gray);">
-                    <i class="fas fa-ban" style="font-size: 30px;"></i>
-                    <p>Nenhum produto ativo</p>
+                    <i class="fas fa-chart-bar" style="font-size: 30px;"></i>
+                    <p>Sem vendas registradas</p>
                 </div>
             `;
             return;
         }
         
-        // Ordenar por vendas (simulação - usar campo disponível)
-        const produtosOrdenados = produtosAtivos
-            .sort((a, b) => {
-                const vendasA = a.total_vendido || a.vendas_semanais || a.vendas_mes || 0;
-                const vendasB = b.total_vendido || b.vendas_semanais || b.vendas_mes || 0;
-                return vendasB - vendasA;
-            })
-            .slice(0, 5); // Top 5
-        
         let html = '<div class="top-products-list">';
         
-        produtosOrdenados.forEach((produto, index) => {
-            const vendasCount = produto.total_vendido || produto.vendas_semanais || produto.vendas_mes || 0;
+        produtosComVendas.forEach((produto, index) => {
+            const vendasCount = produto.vendas_reais;
             const estoque = produto.estoque || 0;
             const emoji = produto.emoji || '🍦';
             
@@ -1099,19 +1129,13 @@ async function loadProdutosMaisVendidos() {
         
     } catch (error) {
         console.error('Erro ao carregar produtos mais vendidos:', error);
-        throw error;
+        document.getElementById('topProductsList').innerHTML = 
+            `<div style="text-align: center; padding: 20px; color: var(--danger);">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Erro ao carregar dados</p>
+            </div>`;
     }
 }
-
-async function loadEstoqueBaixo() {
-    try {
-        const produtosAPI = await neonAPI('get_produtos');
-        const container = document.getElementById('lowStockContainer');
-        const lista = document.getElementById('lowStockList');
-        
-        if (!Array.isArray(produtosAPI)) {
-            container.style.display = 'none';
-            return;
         }
         
         // Filtrar produtos ativos com estoque baixo (≤ 10 unidades)
@@ -1175,75 +1199,170 @@ async function loadGraficos() {
             charts.weeklyChart.destroy();
         }
         
-        // 1. Gráfico de produtos mais vendidos
+        // 1. Gráfico de produtos mais vendidos (usando dados reais)
+        const vendasAPI = await neonAPI('get_vendas_recentes');
         const produtosAPI = await neonAPI('get_produtos');
-        const produtosAtivos = produtosAPI.filter(p => p.ativo);
         
-        const topProdutos = produtosAtivos
-            .sort((a, b) => {
-                const vendasA = a.total_vendido || a.vendas_semanais || a.vendas_mes || 0;
-                const vendasB = b.total_vendido || b.vendas_semanais || b.vendas_mes || 0;
-                return vendasB - vendasA;
-            })
-            .slice(0, 5);
+        // Calcular vendas por produto
+        const vendasPorProduto = {};
+        let temVendas = false;
         
-        const ctx1 = document.getElementById('flavorsChart')?.getContext('2d');
-        if (ctx1 && topProdutos.length > 0) {
-            const vendasData = topProdutos.map(p => 
-                p.total_vendido || p.vendas_semanais || p.vendas_mes || 1
-            );
-            const nomes = topProdutos.map(p => 
-                p.nome.length > 15 ? p.nome.substring(0, 15) + '...' : p.nome
-            );
-            
-            charts.flavorsChart = new Chart(ctx1, {
-                type: 'doughnut',
-                data: {
-                    labels: nomes,
-                    datasets: [{
-                        data: vendasData,
-                        backgroundColor: [
-                            '#36B5B0', // primary
-                            '#FF7BAC', // secondary
-                            '#FFD166', // accent
-                            '#4CAF50', // success
-                            '#9C27B0'  // purple
-                        ],
-                        borderWidth: 1,
-                        borderColor: '#ffffff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 15,
-                                font: {
-                                    size: 11
-                                },
-                                color: '#333'
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.label}: ${context.raw} vendas`;
-                                }
-                            }
+        if (Array.isArray(vendasAPI) && vendasAPI.length > 0) {
+            temVendas = true;
+            vendasAPI.forEach(venda => {
+                if (venda.itens && Array.isArray(venda.itens)) {
+                    venda.itens.forEach(item => {
+                        const produtoId = item.produto_id;
+                        const quantidade = item.quantidade || 0;
+                        
+                        if (!vendasPorProduto[produtoId]) {
+                            vendasPorProduto[produtoId] = 0;
                         }
-                    }
+                        vendasPorProduto[produtoId] += quantidade;
+                    });
                 }
             });
         }
         
-        // 2. Gráfico de evolução semanal (dados simulados)
+        const ctx1 = document.getElementById('flavorsChart')?.getContext('2d');
+        if (ctx1) {
+            if (temVendas) {
+                // Mapear produtos com suas vendas
+                const produtosComVendas = produtosAPI
+                    .filter(p => p.ativo)
+                    .map(produto => ({
+                        ...produto,
+                        vendas: vendasPorProduto[produto.id] || 0
+                    }))
+                    .filter(p => p.vendas > 0) // Apenas produtos com vendas
+                    .sort((a, b) => b.vendas - a.vendas)
+                    .slice(0, 5);
+                
+                if (produtosComVendas.length > 0) {
+                    const vendasData = produtosComVendas.map(p => p.vendas);
+                    const nomes = produtosComVendas.map(p => 
+                        p.nome.length > 15 ? p.nome.substring(0, 15) + '...' : p.nome
+                    );
+                    
+                    charts.flavorsChart = new Chart(ctx1, {
+                        type: 'doughnut',
+                        data: {
+                            labels: nomes,
+                            datasets: [{
+                                data: vendasData,
+                                backgroundColor: [
+                                    '#36B5B0', // primary
+                                    '#FF7BAC', // secondary
+                                    '#FFD166', // accent
+                                    '#4CAF50', // success
+                                    '#9C27B0'  // purple
+                                ],
+                                borderWidth: 1,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        padding: 15,
+                                        font: {
+                                            size: 11
+                                        },
+                                        color: '#333'
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `${context.label}: ${context.raw} vendas`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    // Sem dados de vendas
+                    charts.flavorsChart = new Chart(ctx1, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Sem vendas'],
+                            datasets: [{
+                                data: [1],
+                                backgroundColor: ['#f0f0f0']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                // Sem vendas no sistema
+                charts.flavorsChart = new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Sem dados'],
+                        datasets: [{
+                            data: [1],
+                            backgroundColor: ['#f0f0f0']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 2. Gráfico de evolução semanal (usando dados reais)
         const ctx2 = document.getElementById('weeklyChart')?.getContext('2d');
         if (ctx2) {
-            const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-            const valores = dias.map(() => Math.floor(Math.random() * 500) + 100);
+            const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            const valores = [0, 0, 0, 0, 0, 0, 0];
+            
+            // Calcular vendas por dia da semana usando dados reais
+            if (Array.isArray(vendasAPI) && vendasAPI.length > 0) {
+                vendasAPI.forEach(venda => {
+                    try {
+                        let dataVenda;
+                        
+                        // Tentar diferentes formatos de data
+                        if (venda.data) {
+                            dataVenda = new Date(venda.data);
+                        } else if (venda.created_at) {
+                            dataVenda = new Date(venda.created_at);
+                        } else {
+                            dataVenda = new Date(); // Data atual como fallback
+                        }
+                        
+                        const diaSemana = dataVenda.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+                        const total = parseFloat(venda.total) || 0;
+                        
+                        if (diaSemana >= 0 && diaSemana < 7) {
+                            valores[diaSemana] += total;
+                        }
+                    } catch (e) {
+                        console.error('Erro ao processar data da venda:', e);
+                    }
+                });
+            }
             
             charts.weeklyChart = new Chart(ctx2, {
                 type: 'line',
@@ -1311,10 +1430,8 @@ async function loadGraficos() {
         
     } catch (error) {
         console.error('Erro ao carregar gráficos:', error);
-        // Não mostrar erro para o usuário, apenas no console
     }
 }
-
 // ===== SISTEMA DE VENDAS =====
 async function finalizeSale() {
     try {
