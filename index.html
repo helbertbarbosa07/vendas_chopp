@@ -36,22 +36,31 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             height: 100vh;          /* 🔴 mudou */
             overflow: hidden;       /* 🔴 linha nova */
-            padding: 20px;
             color: #333;
         }
 
-        
+            .header,
+            .nav-tabs,
+            .footer {
+            flex-shrink: 0;
+        }
         /* ===== LAYOUT PRINCIPAL ===== */
         .app-container {
+            
+            padding: 20px;
             max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 25px;
             box-shadow: 0 25px 50px rgba(0,0,0,0.2);
             overflow: hidden;
-            height: 100%;
+        
+            height: calc(100vh - 40px); /* 🔴 AJUSTE CRÍTICO */
+            box-sizing: border-box;     /* 🔴 ESSENCIAL */
+        
             display: flex;
             flex-direction: column;
+
         }
         
         /* ===== HEADER ===== */
@@ -160,9 +169,9 @@
         /* ===== CONTEÚDO ===== */
         .main-content {
             flex: 1;
-            padding: 30px;
-            background: #f9f9f9;
             overflow-y: auto;
+            min-height: 0;
+            padding-bottom: 20px; /* 🔴 LINHA FINAL QUE FALTAVA */
 
         }
         
