@@ -49,7 +49,8 @@ async function loadDashboard() {
         await loadUltimasVendas(vendas);
         await loadProdutosMaisVendidos(produtos);
         await loadEstoqueBaixo(produtos);
-        await loadGraficosReais(vendasHoje, produtos);
+        await loadGraficosReais(vendasHoje, vendas);
+
 
         showNotification('✅ Dashboard atualizado!', 'success');
 
@@ -208,42 +209,17 @@ async function loadEstoqueBaixo(produtosData = []) {
     }
 }
 
-// ===== GRÁFICOS REAIS =====
-async function loadGraficosReais(vendasHoje = [], produtosAPI = []) {
+
+// ===== GRÁFICOS DIÁRIO + SEMANAL =====
+async function loadGraficosReais(vendasHoje = [], vendasTodas = []) {
     try {
-        if (charts.flavorsChart) charts.flavorsChart.destroy();
+        if (charts.dailyChart) charts.dailyChart.destroy();
         if (charts.weeklyChart) charts.weeklyChart.destroy();
 
-        const ctx1 = document.getElementById('flavorsChart')?.getContext('2d');
-        if (ctx1) {
-            const topProdutos = produtosAPI
-                .filter(p => p.ativo)
-                .sort((a, b) => (b.total_vendido || 0) - (a.total_vendido || 0))
-                .slice(0, 5);
-
-            if (topProdutos.length) {
-                charts.flavorsChart = new Chart(ctx1, {
-                    type: 'doughnut',
-                    data: {
-                        labels: topProdutos.map(p => p.nome.substring(0, 15)),
-                        datasets: [{
-                            data: topProdutos.map(p => p.total_vendido || 1),
-                            backgroundColor: [
-                                '#36B5B0',
-                                '#FF7BAC',
-                                '#FFD166',
-                                '#4CAF50',
-                                '#9C27B0'
-                            ]
-                        }]
-                    }
-                });
-            }
-        }
-
-        const ctx2 = document.getElementById('weeklyChart')?.getContext('2d');
-        if (ctx2) {
-            const horas = ['08','10','12','14','16','18','20'];
+        // ===== GRÁFICO DIÁRIO (HOJE) =====
+        const ctxDaily = document.getElementById('flavorsChart')?.getContext('2d');
+        if (ctxDaily) {
+            const horas = ['08','10','12','14','16','18','20','22'];
 
             const vendasPorHora = horas.map(h =>
                 vendasHoje
@@ -251,25 +227,69 @@ async function loadGraficosReais(vendasHoje = [], produtosAPI = []) {
                     .reduce((s, v) => s + (parseFloat(v.total) || 0), 0)
             );
 
-            charts.weeklyChart = new Chart(ctx2, {
-                type: 'line',
+            charts.dailyChart = new Chart(ctxDaily, {
+                type: 'bar',
                 data: {
                     labels: horas.map(h => `${h}h`),
                     datasets: [{
-                        label: 'Vendas (R$)',
+                        label: 'Vendas do Dia (R$)',
                         data: vendasPorHora,
-                        borderColor: '#36B5B0',
-                        backgroundColor: 'rgba(54,181,176,0.1)',
-                        fill: true
+                        borderWidth: 1
                     }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+
+        // ===== GRÁFICO SEMANAL =====
+        const ctxWeekly = document.getElementById('weeklyChart')?.getContext('2d');
+        if (ctxWeekly) {
+            const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+            const hoje = new Date();
+            const semana = [];
+
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(hoje.getDate() - i);
+                semana.push(d);
+            }
+
+            const vendasSemana = semana.map(dia => {
+                const dataStr = dia.toISOString().split('T')[0];
+
+                return vendasTodas
+                    .filter(v => {
+                        const dataVenda = v.data || v.created_at || '';
+                        return dataVenda.includes(dataStr);
+                    })
+                    .reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+            });
+
+            charts.weeklyChart = new Chart(ctxWeekly, {
+                type: 'line',
+                data: {
+                    labels: semana.map(d => diasSemana[d.getDay()]),
+                    datasets: [{
+                        label: 'Faturamento da Semana (R$)',
+                        data: vendasSemana,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true
                 }
             });
         }
 
     } catch (error) {
-        console.error('Erro gráficos:', error);
+        console.error('Erro gráficos diário/semanal:', error);
     }
 }
+
 
 // ===== AUTO UPDATE =====
 setInterval(async () => {
