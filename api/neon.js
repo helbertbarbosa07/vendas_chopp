@@ -60,22 +60,23 @@ export default async function handler(req, res) {
                 `;
                 break;
 
-            case 'update_produto':
-                result = await sql`
-                    UPDATE produtos 
-                    SET nome = ${data.nome},
-                        descricao = ${data.descricao},
-                        preco = ${data.preco},
-                        estoque = ${data.estoque},
-                        emoji = ${data.emoji},
-                        cor = ${data.cor},
-                        ativo = ${data.ativo},
-                        foto = ${data.foto},
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ${data.id}
-                    RETURNING *
-                `;
-                break;
+           case 'update_produto':
+            result = await sql`
+                UPDATE produtos 
+                SET nome = ${data.nome},
+                descricao = ${data.descricao},
+                preco = ${data.preco},
+                estoque = ${data.estoque},
+                emoji = ${data.emoji},
+                cor = ${data.cor},
+                ativo = ${data.ativo},
+                foto = ${data.foto ?? sql`foto`},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${data.id}
+            RETURNING *
+        `;
+        break;
+
 
             case 'delete_produto':
                 await sql`DELETE FROM produtos WHERE id = ${data.id}`;
