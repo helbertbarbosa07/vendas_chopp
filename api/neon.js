@@ -60,22 +60,36 @@ export default async function handler(req, res) {
                 `;
                 break;
 
-          case 'update_produto':
-            result = await sql`
-                UPDATE produtos 
-                SET nome = ${data.nome},
-                    descricao = ${data.descricao},
-                    preco = ${data.preco},
-                    estoque = ${data.estoque},
-                    emoji = ${data.emoji},
-                    cor = ${data.cor},
-                    ativo = ${data.ativo},
-                    foto = COALESCE(${data.foto}, foto),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ${data.id}
-                RETURNING *
+         case 'update_produto': {
+    const {
+        id,
+        nome,
+        descricao,
+        preco,
+        estoque,
+        emoji,
+        cor,
+        ativo,
+        foto
+    } = data;
+
+    result = await sql`
+        UPDATE produtos 
+        SET nome = ${nome},
+            descricao = ${descricao},
+            preco = ${preco},
+            estoque = ${estoque},
+            emoji = ${emoji},
+            cor = ${cor},
+            ativo = ${ativo},
+            foto = COALESCE(${foto ?? null}, foto),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${id}
+        RETURNING *
     `;
     break;
+}
+
 
 
 
