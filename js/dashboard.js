@@ -47,7 +47,7 @@ async function loadDashboard() {
             estoqueBaixo;
 
         await loadUltimasVendas(vendas);
-        await loadProdutosMaisVendidos(produtos);
+        awawait loadProdutosMaisVendidos(produtos, vendas);
         await loadEstoqueBaixo(produtos);
         await loadGraficosReais(vendasHoje, vendas);
 
@@ -125,35 +125,63 @@ async function loadUltimasVendas(vendasData = []) {
     }
 }
 
-// ===== PRODUTOS MAIS VENDIDOS =====
-async function loadProdutosMaisVendidos(produtosData = []) {
+// ===== PRODUTOS MAIS VENDIDOS (REAL) =====
+async function loadProdutosMaisVendidos(produtosData = [], vendasData = []) {
     try {
         const lista = document.getElementById('topProductsList');
 
-        const produtosOrdenados = produtosData
+        if (!produtosData.length || !vendasData.length) {
+            lista.innerHTML = `
+                <div style="text-align:center;padding:20px;color:var(--gray)">
+                    <i class="fas fa-box-open"></i>
+                    <p>Sem dados suficientes</p>
+                </div>`;
+            return;
+        }
+
+        // Mapa: produto_id -> quantidade vendida
+        const vendidosMap = {};
+
+        vendasData.forEach(venda => {
+            if (Array.isArray(venda.itens)) {
+                venda.itens.forEach(item => {
+                    const id = item.produto_id;
+                    const qtd = item.quantidade || 1;
+
+                    vendidosMap[id] = (vendidosMap[id] || 0) + qtd;
+                });
+            }
+        });
+
+        // Junta produtos + vendas
+        const ranking = produtosData
             .filter(p => p.ativo)
-            .sort((a, b) => (b.total_vendido || 0) - (a.total_vendido || 0))
+            .map(p => ({
+                ...p,
+                vendidos: vendidosMap[p.id] || 0
+            }))
+            .sort((a, b) => b.vendidos - a.vendidos)
             .slice(0, 5);
 
-        if (!produtosOrdenados.length) {
+        if (!ranking.length) {
             lista.innerHTML = `
                 <div style="text-align:center;padding:20px;color:var(--gray)">
                     <i class="fas fa-ban"></i>
-                    <p>Nenhum produto ativo</p>
+                    <p>Nenhum produto vendido</p>
                 </div>`;
             return;
         }
 
         let html = '<div class="top-products-list">';
 
-        produtosOrdenados.forEach((produto, index) => {
+        ranking.forEach((produto, index) => {
             html += `
             <div class="top-product-item">
                 <div class="top-product-emoji">${produto.emoji || '🍦'}</div>
                 <div class="top-product-info">
                     <div class="top-product-name">${produto.nome}</div>
                     <div class="top-product-stats">
-                        <span>${produto.total_vendido || 0} vendas</span>
+                        <span>${produto.vendidos} vendidos</span>
                         <span>${produto.estoque} em estoque</span>
                     </div>
                 </div>
@@ -167,48 +195,6 @@ async function loadProdutosMaisVendidos(produtosData = []) {
         console.error('Erro produtos mais vendidos:', error);
     }
 }
-
-// ===== ESTOQUE BAIXO =====
-async function loadEstoqueBaixo(produtosData = []) {
-    try {
-        const container = document.getElementById('lowStockContainer');
-        const lista = document.getElementById('lowStockList');
-
-        const estoqueBaixo = produtosData.filter(p =>
-            p.ativo && p.estoque <= 10
-        );
-
-        if (!estoqueBaixo.length) {
-            container.style.display = 'none';
-            return;
-        }
-
-        container.style.display = 'block';
-
-        let html = '<div class="low-stock-list">';
-
-        estoqueBaixo.slice(0, 6).forEach(produto => {
-            html += `
-            <div class="low-stock-item">
-                <div class="low-stock-emoji">${produto.emoji || '⚠️'}</div>
-                <div class="low-stock-info">
-                    <div class="low-stock-name">${produto.nome}</div>
-                    <div class="low-stock-quantity">
-                        <span style="color:${produto.estoque <= 3 ? '#dc3545' : '#ff9800'}">
-                            ${produto.estoque <= 0 ? 'ESGOTADO' : produto.estoque + ' unidades'}
-                        </span>
-                    </div>
-                </div>
-            </div>`;
-        });
-
-        lista.innerHTML = html + '</div>';
-
-    } catch (error) {
-        console.error('Erro estoque baixo:', error);
-    }
-}
-
 
 // ===== GRÁFICOS DIÁRIO + SEMANAL =====
 async function loadGraficosReais(vendasHoje = [], vendasTodas = []) {
