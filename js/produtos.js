@@ -2,6 +2,8 @@
 async function loadAllProducts() {
     try {
         const productsList = document.getElementById('productsList');
+        if (!productsList) return;
+        
         productsList.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i><p>Carregando produtos...</p></div>';
         
         // Buscar produtos da API
@@ -12,7 +14,7 @@ async function loadAllProducts() {
                 <div style="text-align: center; padding: 40px; color: var(--gray);">
                     <i class="fas fa-ice-cream"></i>
                     <p>Nenhum produto cadastrado</p>
-                    <button onclick="abrirModalProduto()" style="margin-top: 15px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 8px;">
+                    <button onclick="abrirModalProduto()" style="margin-top: 15px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
                         <i class="fas fa-plus"></i> Cadastrar Primeiro Produto
                     </button>
                 </div>
@@ -24,18 +26,26 @@ async function loadAllProducts() {
         const filterValue = document.getElementById('productFilter')?.value || 'todos';
         const searchTerm = document.getElementById('productSearch')?.value?.toLowerCase() || '';
         
-        let produtosFiltrados = produtos;
+        let produtosFiltrados = [...produtos];
         
         // Aplicar filtro por status
-        if (filterValue === 'estoque-baixo') {
-            produtosFiltrados = produtos.filter(p => p.ativo && p.estoque > 0 && p.estoque <= 10);
-        } else if (filterValue === 'mais-vendidos') {
-            produtosFiltrados = produtos.filter(p => p.ativo)
-                .sort((a, b) => (b.total_vendido || 0) - (a.total_vendido || 0));
-        } else if (filterValue === 'ativos') {
-            produtosFiltrados = produtos.filter(p => p.ativo);
-        } else if (filterValue === 'inativos') {
-            produtosFiltrados = produtos.filter(p => !p.ativo);
+        switch(filterValue) {
+            case 'estoque-baixo':
+                produtosFiltrados = produtos.filter(p => p.ativo && p.estoque > 0 && p.estoque <= 10);
+                break;
+            case 'mais-vendidos':
+                produtosFiltrados = produtos.filter(p => p.ativo)
+                    .sort((a, b) => (b.total_vendido || 0) - (a.total_vendido || 0));
+                break;
+            case 'ativos':
+                produtosFiltrados = produtos.filter(p => p.ativo);
+                break;
+            case 'inativos':
+                produtosFiltrados = produtos.filter(p => !p.ativo);
+                break;
+            default:
+                // "todos" - não filtra
+                break;
         }
         
         // Aplicar busca
@@ -88,7 +98,7 @@ async function loadAllProducts() {
                         ${produto.nome}
                     </h3>
                     
-                    <p style="color: var(--gray); font-size: 14px; margin-bottom: 10px; text-align: center; height: 60px; overflow: hidden;">
+                    <p style="color: var(--gray); font-size: 14px; margin-bottom: 10px; text-align: center; height: 40px; overflow: hidden; line-height: 1.3;">
                         ${produto.descricao || 'Sem descrição'}
                     </p>
                     
@@ -131,7 +141,7 @@ async function loadAllProducts() {
                                 ">
                             <i class="fas fa-edit"></i> Editar
                         </button>
-                        <button onclick="toggleDisponibilidade(${produto.id}, ${produto.ativo})" 
+                        <button onclick="toggleDisponibilidadeProduto(${produto.id}, ${produto.ativo})" 
                                 style="
                                     flex: 1; 
                                     padding: 8px; 
@@ -160,23 +170,25 @@ async function loadAllProducts() {
     } catch (error) {
         console.error('Erro ao carregar produtos:', error);
         const productsList = document.getElementById('productsList');
-        productsList.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: var(--danger);">
-                <i class="fas fa-exclamation-triangle" style="font-size: 50px;"></i>
-                <p style="margin-top: 15px;">Erro ao carregar produtos</p>
-                <p style="font-size: 14px; opacity: 0.7;">${error.message}</p>
-            </div>
-        `;
+        if (productsList) {
+            productsList.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--danger);">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 50px;"></i>
+                    <p style="margin-top: 15px;">Erro ao carregar produtos</p>
+                    <p style="font-size: 14px; opacity: 0.7;">${error.message}</p>
+                </div>
+            `;
+        }
     }
 }
 
 // Toggle disponibilidade do produto
-async function toggleDisponibilidade(produtoId, estaAtivo) {
+async function toggleDisponibilidadeProduto(produtoId, estaAtivo) {
     try {
         const novoStatus = !estaAtivo;
         const acao = novoStatus ? 'ativar' : 'desativar';
         
-        if (!confirm(`Deseja ${acao} este produto?`)) {
+        if (!confirm(`Deseja ${acao} este produto? ${novoStatus ? 'Ele aparecerá nas vendas.' : 'Ele não aparecerá mais nas vendas.'}`)) {
             return;
         }
         
@@ -201,7 +213,9 @@ async function toggleDisponibilidade(produtoId, estaAtivo) {
         
         // Se estiver na página de vendas, recarregar também
         if (document.getElementById('vendas')?.classList.contains('active')) {
-            await loadProductsForSale();
+            setTimeout(async () => {
+                await loadProductsForSale();
+            }, 500);
         }
         
     } catch (error) {
@@ -219,20 +233,13 @@ async function editarProduto(produtoId) {
             return;
         }
         
-        // Preencher modal de edição (usar o mesmo modal de novo produto)
-        document.getElementById('modalTitle').textContent = 'Editar Produto';
-        document.getElementById('productId').value = produto.id;
-        document.getElementById('productName').value = produto.nome;
-        document.getElementById('productDescription').value = produto.descricao || '';
-        document.getElementById('productPrice').value = produto.preco;
-        document.getElementById('productStock').value = produto.estoque;
-        document.getElementById('productEmoji').value = produto.emoji || '🍦';
-        document.getElementById('selectedEmoji').textContent = produto.emoji || '🍦';
-        document.getElementById('productColor').value = produto.cor || '#36B5B0';
-        document.getElementById('productActive').checked = produto.ativo;
-        
-        // Mostrar modal
-        document.getElementById('productModal').classList.add('active');
+        // Verificar se a função existe
+        if (typeof window.abrirModalProduto === 'function') {
+            window.abrirModalProduto(produto);
+        } else {
+            showNotification('❌ Sistema não configurado corretamente', 'error');
+            console.error('Função abrirModalProduto não encontrada');
+        }
         
     } catch (error) {
         console.error('Erro ao editar produto:', error);
@@ -243,36 +250,38 @@ async function editarProduto(produtoId) {
 // Configurar botões produtos
 document.addEventListener('DOMContentLoaded', function() {
     // Botão "Novo Produto"
-    document.getElementById('addProduct')?.addEventListener('click', () => {
-        abrirModalProduto();
-    });
-    
-    // Filtro de produtos
-    document.getElementById('productFilter')?.addEventListener('change', () => {
-        loadAllProducts();
-    });
-    
-    // Busca de produtos
-    document.getElementById('productSearch')?.addEventListener('input', () => {
-        loadAllProducts();
-    });
-});
-
-// Função para abrir modal de novo produto
-function abrirModalProduto() {
-    document.getElementById('modalTitle').textContent = 'Novo Produto';
-    document.getElementById('productForm').reset();
-    document.getElementById('productId').value = '';
-    document.getElementById('selectedEmoji').textContent = '🍦';
-    document.getElementById('productEmoji').value = '🍦';
-    document.getElementById('productColor').value = '#36B5B0';
-    document.getElementById('productActive').checked = true;
-    
-    // Limpar preview de foto
-    const photoPreview = document.getElementById('photoPreview');
-    if (photoPreview) {
-        photoPreview.style.display = 'none';
+    const addProductBtn = document.getElementById('addProduct');
+    if (addProductBtn) {
+        addProductBtn.addEventListener('click', () => {
+            if (typeof window.abrirModalProduto === 'function') {
+                window.abrirModalProduto();
+            } else {
+                showNotification('❌ Sistema não configurado', 'error');
+            }
+        });
     }
     
-    document.getElementById('productModal').classList.add('active');
-}
+    // Filtro de produtos
+    const productFilter = document.getElementById('productFilter');
+    if (productFilter) {
+        productFilter.addEventListener('change', () => {
+            loadAllProducts();
+        });
+    }
+    
+    // Busca de produtos (debounce para não sobrecarregar)
+    const productSearch = document.getElementById('productSearch');
+    if (productSearch) {
+        let searchTimeout;
+        productSearch.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadAllProducts();
+            }, 300);
+        });
+    }
+});
+
+// Tornar funções disponíveis globalmente
+window.toggleDisponibilidadeProduto = toggleDisponibilidadeProduto;
+window.editarProduto = editarProduto;
