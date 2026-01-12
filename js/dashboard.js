@@ -1,4 +1,4 @@
-// ===== TOP 3 PRODUTOS MAIS VENDIDOS =====   
+// ===== TOP 3 PRODUTOS MAIS VENDIDOS ===
 function loadTopProdutos(produtos = [], vendas = []) {
     const lista = document.getElementById('topProductsList');
 
