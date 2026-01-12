@@ -185,42 +185,34 @@ async function loadAllProducts() {
 // Toggle disponibilidade do produto
 async function toggleDisponibilidadeProduto(produtoId, estaAtivo) {
     try {
-        const novoStatus = !estaAtivo;
-        const acao = novoStatus ? 'ativar' : 'desativar';
-        
-        if (!confirm(`Deseja ${acao} este produto? ${novoStatus ? 'Ele aparecerá nas vendas.' : 'Ele não aparecerá mais nas vendas.'}`)) {
+        const produto = produtos.find(p => p.id === produtoId);
+        if (!produto) {
+            showNotification('Produto não encontrado', 'error');
             return;
         }
-        
-        showNotification(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Desativando'} produto...`, 'info');
-        
-        // Atualizar na API
+
+        const novoStatus = !estaAtivo;
+
         await neonAPI('update_produto', {
-            id: produtoId,
+            id: produto.id,
+            nome: produto.nome,
+            descricao: produto.descricao,
+            preco: produto.preco,
+            estoque: produto.estoque,
+            emoji: produto.emoji,
+            cor: produto.cor,
             ativo: novoStatus
         });
-        
-        // Atualizar localmente
-        const produtoIndex = produtos.findIndex(p => p.id === produtoId);
-        if (produtoIndex !== -1) {
-            produtos[produtoIndex].ativo = novoStatus;
-        }
-        
-        // Recarregar lista
+
         await loadAllProducts();
-        
-        showNotification(`✅ Produto ${acao === 'ativar' ? 'ativado' : 'desativado'} com sucesso!`, 'success');
-        
-        // Se estiver na página de vendas, recarregar também
-        if (document.getElementById('vendas')?.classList.contains('active')) {
-            setTimeout(async () => {
-                await loadProductsForSale();
-            }, 500);
-        }
-        
+        showNotification(
+            `Produto ${novoStatus ? 'ativado' : 'desativado'} com sucesso`,
+            'success'
+        );
+
     } catch (error) {
-        console.error('Erro ao alternar disponibilidade:', error);
-        showNotification('❌ Erro ao atualizar produto', 'error');
+        console.error(error);
+        showNotification('Erro ao atualizar produto', 'error');
     }
 }
 
