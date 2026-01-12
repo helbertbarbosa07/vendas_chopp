@@ -1,4 +1,38 @@
+// ===== ESTOQUE BAIXO =====
+async function loadEstoqueBaixo(produtosData = []) {
+    const container = document.getElementById('lowStockContainer');
+    const lista = document.getElementById('lowStockList');
+
+    if (!container || !lista) return;
+
+    const estoqueBaixo = produtosData.filter(p =>
+        p.ativo && p.estoque <= 10
+    );
+
+    if (!estoqueBaixo.length) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    let html = '<div class="low-stock-list">';
+
+    estoqueBaixo.slice(0, 6).forEach(produto => {
+        html += `
+        <div class="low-stock-item">
+            <strong>${produto.nome}</strong><br>
+            <span style="color:${produto.estoque <= 3 ? 'red' : 'orange'}">
+                ${produto.estoque <= 0 ? 'ESGOTADO' : produto.estoque + ' unidades'}
+            </span>
+        </div>`;
+    });
+
+    lista.innerHTML = html + '</div>';
+}
+
 // ===== DASHBOARD EM TEMPO REAL =====
+
 async function loadDashboard() {
     try {
         showNotification('🔄 Carregando dashboard...', 'info');
