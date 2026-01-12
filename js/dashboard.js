@@ -20,37 +20,22 @@ async function loadDashboard() {
             return dataVenda.includes(hoje);
         });
 
-        const faturamentoHoje = vendasHoje.reduce((total, venda) => {
-            return total + (parseFloat(venda.total) || 0);
-        }, 0);
-
-        const totalItensHoje = vendasHoje.reduce((total, venda) => {
-            return total + (parseInt(venda.total_itens) || 1);
-        }, 0);
-
+        const faturamentoHoje = vendasHoje.reduce((t, v) => t + (parseFloat(v.total) || 0), 0);
+        const totalItensHoje = vendasHoje.reduce((t, v) => t + (parseInt(v.total_itens) || 1), 0);
         const totalVendasHoje = vendasHoje.length;
-        const mediaPorVenda = totalVendasHoje > 0
-            ? faturamentoHoje / totalVendasHoje
-            : 0;
+        const mediaPorVenda = totalVendasHoje ? faturamentoHoje / totalVendasHoje : 0;
 
-        const estoqueBaixo = produtos.filter(p =>
-            p.ativo && p.estoque <= 10
-        ).length;
+        const estoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= 10).length;
 
-        document.getElementById('todayRevenue').textContent =
-            `R$ ${formatPrice(faturamentoHoje)}`;
-        document.getElementById('todayChops').textContent =
-            totalItensHoje;
-        document.getElementById('avgSale').textContent =
-            `R$ ${formatPrice(mediaPorVenda)}`;
-        document.getElementById('lowStock').textContent =
-            estoqueBaixo;
+        document.getElementById('todayRevenue').textContent = `R$ ${formatPrice(faturamentoHoje)}`;
+        document.getElementById('todayChops').textContent = totalItensHoje;
+        document.getElementById('avgSale').textContent = `R$ ${formatPrice(mediaPorVenda)}`;
+        document.getElementById('lowStock').textContent = estoqueBaixo;
 
         await loadUltimasVendas(vendas);
-        awawait loadProdutosMaisVendidos(produtos, vendas);
+        await loadProdutosMaisVendidos(produtos, vendas);
         await loadEstoqueBaixo(produtos);
         await loadGraficosReais(vendasHoje, vendas);
-
 
         showNotification('✅ Dashboard atualizado!', 'success');
 
@@ -62,224 +47,153 @@ async function loadDashboard() {
 
 // ===== ÚLTIMAS VENDAS =====
 async function loadUltimasVendas(vendasData = []) {
-    try {
-        const lista = document.getElementById('recentSalesList');
+    const lista = document.getElementById('recentSalesList');
 
-        if (!Array.isArray(vendasData) || vendasData.length === 0) {
-            lista.innerHTML = `
-                <div class="empty-sales">
-                    <i class="fas fa-shopping-cart"></i>
-                    <p>Nenhuma venda recente</p>
-                </div>`;
-            return;
+    if (!vendasData.length) {
+        lista.innerHTML = `
+            <div class="empty-sales">
+                <i class="fas fa-shopping-cart"></i>
+                <p>Nenhuma venda recente</p>
+            </div>`;
+        return;
+    }
+
+    let html = `
+    <div style="overflow-x:auto">
+    <table class="sales-table">
+        <thead>
+            <tr>
+                <th>Hora</th>
+                <th>Produtos</th>
+                <th>Valor</th>
+                <th>Pagamento</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    vendasData.slice(0, 5).forEach(venda => {
+        let hora = '--:--';
+
+        if (venda.hora) hora = venda.hora;
+        else if (venda.created_at) {
+            hora = new Date(venda.created_at).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
 
-        let html = `
-        <div style="overflow-x:auto">
-        <table class="sales-table">
-            <thead>
-                <tr>
-                    <th>Hora</th>
-                    <th>Produtos</th>
-                    <th>Valor</th>
-                    <th>Pagamento</th>
-                </tr>
-            </thead>
-            <tbody>`;
+        const pagamento = venda.pagamento || 'dinheiro';
 
-        vendasData.slice(0, 5).forEach(venda => {
-            let hora = '--:--';
+        html += `
+        <tr>
+            <td>${hora}</td>
+            <td>${venda.total_itens || 1} itens</td>
+            <td><strong>R$ ${formatPrice(venda.total || 0)}</strong></td>
+            <td>
+                <span class="payment-badge payment-${pagamento.toLowerCase()}">
+                    ${pagamento}
+                </span>
+            </td>
+        </tr>`;
+    });
 
-            if (venda.hora) {
-                hora = venda.hora;
-            } else if (venda.created_at) {
-                hora = new Date(venda.created_at).toLocaleTimeString('pt-BR', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            }
-
-            const total = parseFloat(venda.total) || 0;
-            const produtosCount = venda.total_itens || 1;
-            const pagamento = venda.pagamento || 'dinheiro';
-            const pagamentoClass = pagamento.toLowerCase();
-
-            html += `
-            <tr>
-                <td>${hora}</td>
-                <td>${produtosCount} itens</td>
-                <td><strong>R$ ${formatPrice(total)}</strong></td>
-                <td>
-                    <span class="payment-badge payment-${pagamentoClass}">
-                        ${pagamento}
-                    </span>
-                </td>
-            </tr>`;
-        });
-
-        html += '</tbody></table></div>';
-        lista.innerHTML = html;
-
-    } catch (error) {
-        console.error('Erro últimas vendas:', error);
-    }
+    lista.innerHTML = html + '</tbody></table></div>';
 }
 
 // ===== PRODUTOS MAIS VENDIDOS (REAL) =====
 async function loadProdutosMaisVendidos(produtosData = [], vendasData = []) {
-    try {
-        const lista = document.getElementById('topProductsList');
+    const lista = document.getElementById('topProductsList');
 
-        if (!produtosData.length || !vendasData.length) {
-            lista.innerHTML = `
-                <div style="text-align:center;padding:20px;color:var(--gray)">
-                    <i class="fas fa-box-open"></i>
-                    <p>Sem dados suficientes</p>
-                </div>`;
-            return;
+    const vendidosMap = {};
+
+    vendasData.forEach(venda => {
+        if (Array.isArray(venda.itens)) {
+            venda.itens.forEach(item => {
+                vendidosMap[item.produto_id] =
+                    (vendidosMap[item.produto_id] || 0) + (item.quantidade || 1);
+            });
         }
+    });
 
-        // Mapa: produto_id -> quantidade vendida
-        const vendidosMap = {};
+    const ranking = produtosData
+        .filter(p => p.ativo)
+        .map(p => ({ ...p, vendidos: vendidosMap[p.id] || 0 }))
+        .sort((a, b) => b.vendidos - a.vendidos)
+        .slice(0, 5);
 
-        vendasData.forEach(venda => {
-            if (Array.isArray(venda.itens)) {
-                venda.itens.forEach(item => {
-                    const id = item.produto_id;
-                    const qtd = item.quantidade || 1;
-
-                    vendidosMap[id] = (vendidosMap[id] || 0) + qtd;
-                });
-            }
-        });
-
-        // Junta produtos + vendas
-        const ranking = produtosData
-            .filter(p => p.ativo)
-            .map(p => ({
-                ...p,
-                vendidos: vendidosMap[p.id] || 0
-            }))
-            .sort((a, b) => b.vendidos - a.vendidos)
-            .slice(0, 5);
-
-        if (!ranking.length) {
-            lista.innerHTML = `
-                <div style="text-align:center;padding:20px;color:var(--gray)">
-                    <i class="fas fa-ban"></i>
-                    <p>Nenhum produto vendido</p>
-                </div>`;
-            return;
-        }
-
-        let html = '<div class="top-products-list">';
-
-        ranking.forEach((produto, index) => {
-            html += `
-            <div class="top-product-item">
-                <div class="top-product-emoji">${produto.emoji || '🍦'}</div>
-                <div class="top-product-info">
-                    <div class="top-product-name">${produto.nome}</div>
-                    <div class="top-product-stats">
-                        <span>${produto.vendidos} vendidos</span>
-                        <span>${produto.estoque} em estoque</span>
-                    </div>
-                </div>
-                <div class="top-product-rank">${index + 1}</div>
-            </div>`;
-        });
-
-        lista.innerHTML = html + '</div>';
-
-    } catch (error) {
-        console.error('Erro produtos mais vendidos:', error);
+    if (!ranking.length) {
+        lista.innerHTML = `<p style="text-align:center">Nenhum produto vendido</p>`;
+        return;
     }
+
+    let html = '<div class="top-products-list">';
+
+    ranking.forEach((p, i) => {
+        html += `
+        <div class="top-product-item">
+            <div class="top-product-emoji">${p.emoji || '🍦'}</div>
+            <div>
+                <strong>${p.nome}</strong><br>
+                ${p.vendidos} vendidos · ${p.estoque} estoque
+            </div>
+            <div class="top-product-rank">${i + 1}</div>
+        </div>`;
+    });
+
+    lista.innerHTML = html + '</div>';
 }
 
 // ===== GRÁFICOS DIÁRIO + SEMANAL =====
 async function loadGraficosReais(vendasHoje = [], vendasTodas = []) {
-    try {
-        if (charts.dailyChart) charts.dailyChart.destroy();
-        if (charts.weeklyChart) charts.weeklyChart.destroy();
+    if (charts.dailyChart) charts.dailyChart.destroy();
+    if (charts.weeklyChart) charts.weeklyChart.destroy();
 
-        // ===== GRÁFICO DIÁRIO (HOJE) =====
-        const ctxDaily = document.getElementById('flavorsChart')?.getContext('2d');
-        if (ctxDaily) {
-            const horas = ['08','10','12','14','16','18','20','22'];
+    const ctxDaily = document.getElementById('flavorsChart')?.getContext('2d');
+    if (ctxDaily) {
+        const horas = ['08','10','12','14','16','18','20','22'];
+        const dados = horas.map(h =>
+            vendasHoje
+                .filter(v => (v.hora || '').startsWith(h))
+                .reduce((s, v) => s + (parseFloat(v.total) || 0), 0)
+        );
 
-            const vendasPorHora = horas.map(h =>
-                vendasHoje
-                    .filter(v => (v.hora || '').startsWith(h))
-                    .reduce((s, v) => s + (parseFloat(v.total) || 0), 0)
-            );
-
-            charts.dailyChart = new Chart(ctxDaily, {
-                type: 'bar',
-                data: {
-                    labels: horas.map(h => `${h}h`),
-                    datasets: [{
-                        label: 'Vendas do Dia (R$)',
-                        data: vendasPorHora,
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true
-                }
-            });
-        }
-
-        // ===== GRÁFICO SEMANAL =====
-        const ctxWeekly = document.getElementById('weeklyChart')?.getContext('2d');
-        if (ctxWeekly) {
-            const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-
-            const hoje = new Date();
-            const semana = [];
-
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(hoje.getDate() - i);
-                semana.push(d);
+        charts.dailyChart = new Chart(ctxDaily, {
+            type: 'bar',
+            data: {
+                labels: horas.map(h => `${h}h`),
+                datasets: [{ label: 'Vendas do Dia (R$)', data: dados }]
             }
+        });
+    }
 
-            const vendasSemana = semana.map(dia => {
-                const dataStr = dia.toISOString().split('T')[0];
+    const ctxWeekly = document.getElementById('weeklyChart')?.getContext('2d');
+    if (ctxWeekly) {
+        const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+        const semana = [...Array(7)].map((_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            return d;
+        });
 
-                return vendasTodas
-                    .filter(v => {
-                        const dataVenda = v.data || v.created_at || '';
-                        return dataVenda.includes(dataStr);
-                    })
-                    .reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
-            });
+        const dadosSemana = semana.map(d =>
+            vendasTodas
+                .filter(v => (v.data || v.created_at || '').includes(d.toISOString().split('T')[0]))
+                .reduce((s, v) => s + (parseFloat(v.total) || 0), 0)
+        );
 
-            charts.weeklyChart = new Chart(ctxWeekly, {
-                type: 'line',
-                data: {
-                    labels: semana.map(d => diasSemana[d.getDay()]),
-                    datasets: [{
-                        label: 'Faturamento da Semana (R$)',
-                        data: vendasSemana,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true
-                }
-            });
-        }
-
-    } catch (error) {
-        console.error('Erro gráficos diário/semanal:', error);
+        charts.weeklyChart = new Chart(ctxWeekly, {
+            type: 'line',
+            data: {
+                labels: semana.map(d => dias[d.getDay()]),
+                datasets: [{ label: 'Semana (R$)', data: dadosSemana, fill: true }]
+            }
+        });
     }
 }
 
-
 // ===== AUTO UPDATE =====
-setInterval(async () => {
+setInterval(() => {
     if (document.querySelector('#dashboard')?.classList.contains('active')) {
-        await loadDashboard();
+        loadDashboard();
     }
 }, 30000);
