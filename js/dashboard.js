@@ -1,3 +1,57 @@
+// ===== TOP 3 PRODUTOS MAIS VENDIDOS =====
+function loadTopProdutos(produtos = [], vendas = []) {
+    const lista = document.getElementById('topProductsList');
+
+    if (!produtos.length || !vendas.length) {
+        lista.innerHTML = '<p>Nenhum dado disponível</p>';
+        return;
+    }
+
+    // Conta vendas por produto
+    const contador = {};
+
+    vendas.forEach(venda => {
+        if (Array.isArray(venda.itens)) {
+            venda.itens.forEach(item => {
+                const id = item.produto_id;
+                const qtd = item.quantidade || 1;
+                contador[id] = (contador[id] || 0) + qtd;
+            });
+        }
+    });
+
+    // Junta com produtos
+    const top3 = produtos
+        .filter(p => p.ativo)
+        .map(p => ({
+            nome: p.nome,
+            emoji: p.emoji || '🍦',
+            vendidos: contador[p.id] || 0
+        }))
+        .sort((a, b) => b.vendidos - a.vendidos)
+        .slice(0, 3);
+
+    if (!top3.length) {
+        lista.innerHTML = '<p>Nenhuma venda registrada</p>';
+        return;
+    }
+
+    let html = '<div class="top-products-list">';
+
+    top3.forEach((p, index) => {
+        html += `
+        <div class="top-product-item">
+            <div class="top-product-emoji">${p.emoji}</div>
+            <div>
+                <strong>${index + 1}º ${p.nome}</strong><br>
+                ${p.vendidos} vendidos
+            </div>
+        </div>`;
+    });
+
+    lista.innerHTML = html + '</div>';
+}
+
 // ===== ESTOQUE BAIXO =====
 async function loadEstoqueBaixo(produtosData = []) {
     const container = document.getElementById('lowStockContainer');
@@ -67,7 +121,8 @@ async function loadDashboard() {
         document.getElementById('lowStock').textContent = estoqueBaixo;
 
         await loadUltimasVendas(vendas);
-        await loadProdutosMaisVendidos(produtos, vendas);
+       loadTopProdutos(produtos, vendas);
+
         await loadEstoqueBaixo(produtos);
         await loadGraficosReais(vendasHoje, vendas);
 
@@ -134,48 +189,6 @@ async function loadUltimasVendas(vendasData = []) {
     lista.innerHTML = html + '</tbody></table></div>';
 }
 
-// ===== PRODUTOS MAIS VENDIDOS (REAL) =====
-async function loadProdutosMaisVendidos(produtosData = [], vendasData = []) {
-    const lista = document.getElementById('topProductsList');
-
-    const vendidosMap = {};
-
-    vendasData.forEach(venda => {
-        if (Array.isArray(venda.itens)) {
-            venda.itens.forEach(item => {
-                vendidosMap[item.produto_id] =
-                    (vendidosMap[item.produto_id] || 0) + (item.quantidade || 1);
-            });
-        }
-    });
-
-    const ranking = produtosData
-        .filter(p => p.ativo)
-        .map(p => ({ ...p, vendidos: vendidosMap[p.id] || 0 }))
-        .sort((a, b) => b.vendidos - a.vendidos)
-        .slice(0, 5);
-
-    if (!ranking.length) {
-        lista.innerHTML = `<p style="text-align:center">Nenhum produto vendido</p>`;
-        return;
-    }
-
-    let html = '<div class="top-products-list">';
-
-    ranking.forEach((p, i) => {
-        html += `
-        <div class="top-product-item">
-            <div class="top-product-emoji">${p.emoji || '🍦'}</div>
-            <div>
-                <strong>${p.nome}</strong><br>
-                ${p.vendidos} vendidos · ${p.estoque} estoque
-            </div>
-            <div class="top-product-rank">${i + 1}</div>
-        </div>`;
-    });
-
-    lista.innerHTML = html + '</div>';
-}
 
 // ===== GRÁFICOS DIÁRIO + SEMANAL =====
 async function loadGraficosReais(vendasHoje = [], vendasTodas = []) {
