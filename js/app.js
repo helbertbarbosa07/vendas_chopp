@@ -51,7 +51,7 @@ function showNotification(mensagem, tipo = 'info') {
 async function neonAPI(action, data = null) {
     if (isLoading && action !== 'create_venda') {
         console.log(`⏳ ${action} em espera (já carregando)`);
-        return;
+        return Promise.reject(new Error('Aguarde a operação atual finalizar'));
     }
     
     try {
@@ -94,7 +94,11 @@ async function neonAPI(action, data = null) {
         
     } catch (error) {
         console.error(`❌ Erro em ${action}:`, error);
-        showNotification(`Erro: ${error.message}`, 'error');
+        
+        if (error.message !== 'Aguarde a operação atual finalizar') {
+            showNotification(`Erro: ${error.message}`, 'error');
+        }
+        
         throw error;
     } finally {
         isLoading = false;
