@@ -108,19 +108,6 @@ function navigateTo(pageId) {
         tab.click();
     }
 }
-// No produtos.js, remova a função antiga e deixe apenas:
-function abrirModalProdutoParaNovo() {
-    if (typeof abrirModalProduto === 'function') {
-        abrirModalProduto(); // Chama a função do app.js
-    } else {
-        showNotification('❌ Sistema não configurado', 'error');
-    }
-}
-
-// E atualize o event listener:
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('addProduct')?.addEventListener('click', abrirModalProdutoParaNovo);
-});
 
 // ===== INICIALIZAÇÃO =====
 document.addEventListener('DOMContentLoaded', async function() {
