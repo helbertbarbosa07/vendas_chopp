@@ -47,63 +47,32 @@ function showNotification(mensagem, tipo = 'info') {
     }, 3000);
 }
 
-// ===== API NEON =====
-async function neonAPI(action, data = null) {
-    if (isLoading && action !== 'create_venda') {
-        console.log(`⏳ ${action} em espera (já carregando)`);
-        return Promise.reject(new Error('Aguarde a operação atual finalizar'));
+async function neonAPI(action, data) {
+    if (isLoading) {
+        throw new Error('Aguarde a operação atual finalizar');
     }
-    
+
+    isLoading = true;
+
     try {
-        isLoading = true;
-        console.log(`🔄 Executando: ${action}`, data);
-        
-        let apiAction = action;
-        const actionMap = {
-            'create_fiado': 'create_credito',
-            'get_fiados': 'get_creditos',
-            'update_fiado': 'update_credito',
-            'delete_fiado': 'delete_credito'
-        };
-        
-        if (actionMap[action]) {
-            apiAction = actionMap[action];
-        }
-        
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                action: apiAction, 
-                data: data 
-            })
+            body: JSON.stringify({ action, data })
         });
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(`HTTP ${response.status}`);
         }
-        
-        const result = await response.json();
-        
-        if (!result.success) {
-            throw new Error(result.error || 'Erro na API');
-        }
-        
-        console.log(`✅ ${action} executado com sucesso`);
-        return result.data;
-        
-    } catch (error) {
-        console.error(`❌ Erro em ${action}:`, error);
-        
-        if (error.message !== 'Aguarde a operação atual finalizar') {
-            showNotification(`Erro: ${error.message}`, 'error');
-        }
-        
-        throw error;
+
+        return await response.json();
+
     } finally {
+        // 🔥 ISSO É O MAIS IMPORTANTE
         isLoading = false;
     }
 }
+
 
 // ===== NAVEGAÇÃO =====
 function navigateTo(pageId) {
