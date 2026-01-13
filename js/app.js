@@ -61,17 +61,19 @@ async function neonAPI(action, data) {
             body: JSON.stringify({ action, data })
         });
 
+        const json = await response.json(); // 👈 ESSENCIAL
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(json.error || 'Erro no servidor');
         }
 
-        return await response.json();
+        return json;
 
     } finally {
-        // 🔥 ISSO É O MAIS IMPORTANTE
         isLoading = false;
     }
 }
+
 
 
 // ===== NAVEGAÇÃO =====
