@@ -51,7 +51,7 @@ function showNotification(mensagem, tipo = 'info') {
 async function neonAPI(action, data = null) {
     if (isLoading && action !== 'create_venda') {
         console.log(`⏳ ${action} em espera (já carregando)`);
-        return;
+        return Promise.reject(new Error('Aguarde a operação atual finalizar'));
     }
     
     try {
@@ -94,7 +94,11 @@ async function neonAPI(action, data = null) {
         
     } catch (error) {
         console.error(`❌ Erro em ${action}:`, error);
-        showNotification(`Erro: ${error.message}`, 'error');
+        
+        if (error.message !== 'Aguarde a operação atual finalizar') {
+            showNotification(`Erro: ${error.message}`, 'error');
+        }
+        
         throw error;
     } finally {
         isLoading = false;
@@ -109,9 +113,177 @@ function navigateTo(pageId) {
     }
 }
 
+// ===== FUNÇÕES DE MODAL DE PRODUTO =====
+function abrirModalProduto(produto = null) {
+    try {
+        const modal = document.getElementById('productModal');
+        if (!modal) {
+            showNotification('❌ Modal não encontrado', 'error');
+            return;
+        }
+        
+        const title = document.getElementById('modalTitle');
+        const form = document.getElementById('productForm');
+        
+        if (produto) {
+            // Modo edição
+            title.textContent = 'Editar Produto';
+            document.getElementById('productId').value = produto.id;
+            document.getElementById('productName').value = produto.nome || '';
+            document.getElementById('productDescription').value = produto.descricao || '';
+            document.getElementById('productPrice').value = produto.preco || '';
+            document.getElementById('productStock').value = produto.estoque || '';
+            document.getElementById('productEmoji').value = produto.emoji || '🍦';
+            document.getElementById('selectedEmoji').textContent = produto.emoji || '🍦';
+            document.getElementById('productColor').value = produto.cor || '#36B5B0';
+            document.getElementById('productActive').checked = produto.ativo !== false;
+        } else {
+            // Modo novo produto
+            title.textContent = 'Novo Produto';
+            if (form) form.reset();
+            document.getElementById('productId').value = '';
+            document.getElementById('selectedEmoji').textContent = '🍦';
+            document.getElementById('productEmoji').value = '🍦';
+            document.getElementById('productColor').value = '#36B5B0';
+            document.getElementById('productActive').checked = true;
+        }
+        
+        modal.classList.add('active');
+        
+    } catch (error) {
+        console.error('Erro ao abrir modal:', error);
+        showNotification('❌ Erro ao abrir formulário', 'error');
+    }
+}
+
+function fecharModalProduto() {
+    const modal = document.getElementById('productModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+async function salvarProduto() {
+    try {
+        const form = document.getElementById('productForm');
+        if (!form) {
+            showNotification('❌ Formulário não encontrado', 'error');
+            return;
+        }
+        
+        const produtoId = document.getElementById('productId').value;
+        
+        // Validar campos obrigatórios
+        const nome = document.getElementById('productName').value.trim();
+        const preco = parseFloat(document.getElementById('productPrice').value);
+        const estoque = parseInt(document.getElementById('productStock').value);
+        
+        if (!nome) {
+            showNotification('❌ Nome do produto é obrigatório', 'error');
+            document.getElementById('productName').focus();
+            return;
+        }
+        
+        if (isNaN(preco) || preco <= 0) {
+            showNotification('❌ Preço inválido. Use valores maiores que 0', 'error');
+            document.getElementById('productPrice').focus();
+            return;
+        }
+        
+        if (isNaN(estoque) || estoque < 0) {
+            showNotification('❌ Estoque inválido. Use valores positivos', 'error');
+            document.getElementById('productStock').focus();
+            return;
+        }
+        
+        const produtoData = {
+            nome: nome,
+            descricao: document.getElementById('productDescription').value.trim(),
+            preco: preco,
+            estoque: estoque,
+            emoji: document.getElementById('productEmoji').value || '🍦',
+            cor: document.getElementById('productColor').value || '#36B5B0',
+            ativo: document.getElementById('productActive').checked
+        };
+        
+        showNotification('🔄 Salvando produto...', 'info');
+        
+        let resultado;
+        if (produtoId) {
+            // Atualizar produto existente
+            produtoData.id = parseInt(produtoId);
+            resultado = await neonAPI('update_produto', produtoData);
+            showNotification('✅ Produto atualizado com sucesso!', 'success');
+        } else {
+            // Criar novo produto
+            resultado = await neonAPI('create_produto', produtoData);
+            showNotification('✅ Produto criado com sucesso!', 'success');
+        }
+        
+        // Fechar modal
+        fecharModalProduto();
+        
+        // Recarregar produtos
+        if (typeof loadAllProducts === 'function') {
+            await loadAllProducts();
+        }
+        
+        // Recarregar produtos para venda se necessário
+        const vendasPage = document.getElementById('vendas');
+        if (vendasPage && vendasPage.classList.contains('active')) {
+            if (typeof loadProductsForSale === 'function') {
+                setTimeout(async () => {
+                    await loadProductsForSale();
+                }, 500);
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao salvar produto:', error);
+        showNotification(`❌ Erro ao salvar produto: ${error.message}`, 'error');
+    }
+}
+
+function selecionarEmoji(emoji) {
+    document.getElementById('selectedEmoji').textContent = emoji;
+    document.getElementById('productEmoji').value = emoji;
+}
+
+// Tornar funções disponíveis globalmente
+window.abrirModalProduto = abrirModalProduto;
+window.fecharModalProduto = fecharModalProduto;
+window.salvarProduto = salvarProduto;
+window.selecionarEmoji = selecionarEmoji;
+window.navigateTo = navigateTo;
+window.formatPrice = formatPrice;
+window.formatarData = formatarData;
+window.showNotification = showNotification;
+window.neonAPI = neonAPI;
+
 // ===== INICIALIZAÇÃO =====
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('🚀 Sistema Chop Manager PRO iniciando...');
+    
+    // Configurar eventos do modal de produto
+    document.getElementById('closeModal')?.addEventListener('click', fecharModalProduto);
+    document.getElementById('cancelModal')?.addEventListener('click', fecharModalProduto);
+    document.getElementById('saveProduct')?.addEventListener('click', salvarProduto);
+    
+    // Fechar modal ao clicar fora
+    document.getElementById('productModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            fecharModalProduto();
+        }
+    });
+    
+    // Seletor de emoji
+    const emojiPicker = document.getElementById('emojiPicker');
+    if (emojiPicker) {
+        const emojis = ['🍦', '🍨', '🍧', '🎂', '🍰', '🧁', '🍩', '🍪', '🥤', '☕', '🥛', '🧃'];
+        emojiPicker.innerHTML = emojis.map(emoji => `
+            <span class="emoji-option" onclick="selecionarEmoji('${emoji}')">${emoji}</span>
+        `).join('');
+    }
     
     // Configurar navegação
     const tabs = document.querySelectorAll('.nav-tab');
