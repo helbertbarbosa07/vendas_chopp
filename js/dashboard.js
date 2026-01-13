@@ -1,7 +1,7 @@
 /// ===== TOP 3 PRODUTOS MAIS VENDIDOS ===
 function loadTopProdutos(produtos = [], vendas = []) {
     const lista = document.getElementById('topProductsList');
-
+ 
     if (!produtos.length || !vendas.length) {
         lista.innerHTML = '<p>Nenhum dado disponível</p>';
         return;
