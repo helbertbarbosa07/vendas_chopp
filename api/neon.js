@@ -61,28 +61,43 @@ export default async function handler(req, res) {
                 break;
 
            case 'update_produto':
-            result = await sql`
-                UPDATE produtos 
-                SET nome = ${data.nome},
-                descricao = ${data.descricao},
-                preco = ${data.preco},
-                estoque = ${data.estoque},
-                emoji = ${data.emoji},
-                cor = ${data.cor},
-                ativo = ${data.ativo},
-                foto = ${data.foto ?? sql`foto`},
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ${data.id}
-            RETURNING *
-        `;
-        break;
+    if (!data?.id) {
+        return res.status(400).json({
+            success: false,
+            error: 'ID do produto não informado'
+        });
+    }
 
+    result = await sql`
+        UPDATE produtos
+        SET
+            nome = COALESCE(${data.nome}, nome),
+            descricao = COALESCE(${data.descricao}, descricao),
+            preco = COALESCE(${data.preco}, preco),
+            estoque = COALESCE(${data.estoque}, estoque),
+            emoji = COALESCE(${data.emoji}, emoji),
+            cor = COALESCE(${data.cor}, cor),
+            ativo = COALESCE(${data.ativo}, ativo),
+            foto = COALESCE(${data.foto}, foto),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${data.id}
+        RETURNING *
+    `;
+    break;
 
-            case 'delete_produto':
-                await sql`DELETE FROM produtos WHERE id = ${data.id}`;
-                result = { success: true };
-                break;
+    case 'delete_produto':
+    if (!data?.id) {
+        return res.status(400).json({
+            success: false,
+            error: 'ID do produto não informado'
+        });
+    }
 
+    await sql`DELETE FROM produtos WHERE id = ${data.id}`;
+    result = { success: true };
+    break;
+
+                
             case 'create_venda': {
     const {
         data: dataVenda,
