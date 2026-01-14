@@ -31,7 +31,42 @@ export default async function handler(req, res) {
             case 'test':
                 result = { success: true, message: 'API conectada' };
                 break;
+            // Adicione estes cases no switch do neon.js:
 
+case 'get_fiados':
+    result = await sql`
+        SELECT * FROM fiados 
+        ORDER BY created_at DESC
+    `;
+    break;
+
+                case 'create_fiado':
+                    result = await sql`
+                        INSERT INTO fiados 
+                        (nome_cliente, telefone, produtos, valor_total, valor_pago, pago, data_fiado, data_vencimento, observacoes)
+                        VALUES 
+                        (${data.nome_cliente}, ${data.telefone}, ${data.produtos}, 
+                         ${data.valor_total}, ${data.valor_pago || 0}, ${data.pago || false},
+                         ${data.data_fiado}, ${data.data_vencimento}, ${data.observacoes})
+                        RETURNING *
+                    `;
+                    break;
+                
+                case 'update_fiado_pago':
+                    await sql`
+                        UPDATE fiados 
+                        SET pago = true, 
+                            valor_pago = valor_total,
+                            data_pagamento = CURRENT_DATE
+                        WHERE id = ${data.id}
+                    `;
+                    result = { success: true };
+                    break;
+                
+                case 'delete_fiado':
+                    await sql`DELETE FROM fiados WHERE id = ${data.id}`;
+                    result = { success: true };
+                    break;
             case 'get_produtos':
                 result = await sql`
                     SELECT p.*, 
@@ -337,3 +372,4 @@ export default async function handler(req, res) {
         });
     }
 }
+
