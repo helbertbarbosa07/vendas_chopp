@@ -151,11 +151,9 @@ function renderProdutosList(produtosData) {
 
 async function toggleAtivoProduto(produtoId, estaAtivo) {
     try {
-        const acao = estaAtivo ? 'ativar' : 'desativar';
+        showNotification(`🔄 ${estaAtivo ? 'Ativando' : 'Desativando'} produto...`, 'info');
         
-        showNotification(`🔄 ${acao === 'ativar' ? 'Ativando' : 'Desativando'} produto...`, 'info');
-        
-        // Atualizar na API
+        // Enviar apenas o campo necessário
         await neonAPI('update_produto', {
             id: produtoId,
             ativo: estaAtivo
@@ -172,24 +170,21 @@ async function toggleAtivoProduto(produtoId, estaAtivo) {
         
         // Se estiver na página de vendas, recarregar também
         if (document.getElementById('vendas')?.classList.contains('active')) {
-            setTimeout(async () => {
-                if (typeof loadProductsForSale === 'function') {
+            if (typeof loadProductsForSale === 'function') {
+                setTimeout(async () => {
                     await loadProductsForSale();
-                }
-            }, 500);
+                }, 500);
+            }
         }
         
-        showNotification(`✅ Produto ${acao === 'ativar' ? 'ativado' : 'desativado'}!`, 'success');
+        showNotification(`✅ Produto ${estaAtivo ? 'ativado' : 'desativado'}!`, 'success');
         
     } catch (error) {
         console.error('Erro ao alternar status:', error);
         showNotification('❌ Erro ao atualizar produto', 'error');
-        
-        // Reverter visualmente se der erro
-        await loadAllProducts();
+        await loadAllProducts(); // Reverter visualmente
     }
 }
-
 async function confirmarExclusaoProduto(produtoId) {
     try {
         const produto = produtos.find(p => p.id === produtoId);
@@ -198,59 +193,38 @@ async function confirmarExclusaoProduto(produtoId) {
             return;
         }
         
-        if (!confirm(`Tem certeza que deseja EXCLUIR o produto "${produto.nome}"?\n\n⚠️ Esta ação não pode ser desfeita!\n📦 Estoque: ${produto.estoque} unidades\n💰 ${produto.vendas || 0} vendas realizadas`)) {
+        const mensagem = produto.vendas > 0 
+            ? `O produto "${produto.nome}" tem ${produto.vendas} vendas registradas.\nDeseja marcá-lo como INATIVO em vez de excluir?`
+            : `Tem certeza que deseja EXCLUIR o produto "${produto.nome}"?\n\n⚠️ Esta ação não pode ser desfeita!`;
+        
+        if (!confirm(mensagem)) {
             return;
         }
         
-        showNotification('🗑️ Excluindo produto...', 'info');
+        showNotification('🔄 Processando...', 'info');
         
-        // Excluir da API
-        await neonAPI('delete_produto', { id: produtoId });
+        if (produto.vendas > 0) {
+            // Se tem vendas, marcar como inativo
+            await neonAPI('update_produto', {
+                id: produtoId,
+                ativo: false
+            });
+            showNotification('✅ Produto marcado como INATIVO', 'success');
+        } else {
+            // Se não tem vendas, excluir
+            await neonAPI('delete_produto', { id: produtoId });
+            showNotification('✅ Produto excluído com sucesso!', 'success');
+        }
         
-        // Remover localmente
-        produtos = produtos.filter(p => p.id !== produtoId);
-        
-        // Recarregar lista
+        // Recarregar produtos
         await loadAllProducts();
-        
-        showNotification('✅ Produto excluído com sucesso!', 'success');
         
     } catch (error) {
         console.error('Erro ao excluir produto:', error);
-        showNotification('❌ Erro ao excluir produto', 'error');
+        showNotification('❌ Erro: ' + error.message, 'error');
+        await loadAllProducts();
     }
-}
-
-// Configurar botões produtos
-document.addEventListener('DOMContentLoaded', function() {
-    // Botão "Novo Produto"
-    document.getElementById('addProduct')?.addEventListener('click', () => {
-        if (typeof abrirModalProduto === 'function') {
-            abrirModalProduto();
-        } else {
-            showNotification('❌ Sistema não configurado', 'error');
-        }
-    });
-    
-    // Filtro de produtos
-    document.getElementById('productFilter')?.addEventListener('change', () => {
-        loadAllProducts();
-    });
-    
-    // Busca de produtos (com debounce)
-    const productSearch = document.getElementById('productSearch');
-    if (productSearch) {
-        let searchTimeout;
-        productSearch.addEventListener('input', () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                loadAllProducts();
-            }, 300);
-        });
-    }
-});
-
-// Exportar funções
+}// Exportar funções
 window.loadAllProducts = loadAllProducts;
 window.toggleAtivoProduto = toggleAtivoProduto;
 window.confirmarExclusaoProduto = confirmarExclusaoProduto;
