@@ -8,6 +8,7 @@ let fiados = [];
 let carrinho = [];
 let charts = {};
 let isLoading = false;
+let fiadoSelecionadoId = null;
 
 // ===== FUNÇÕES UTILITÁRIAS GLOBAIS =====
 function formatPrice(value) {
@@ -209,6 +210,154 @@ function selecionarEmoji(emoji) {
     document.getElementById('productEmoji').value = emoji;
 }
 
+// ===== FUNÇÕES DE MODAL DE FIADO =====
+function abrirModalFiado(fiado = null) {
+    try {
+        const modal = document.getElementById('fiadoModal');
+        if (!modal) {
+            showNotification('❌ Modal de fiado não encontrado', 'error');
+            return;
+        }
+        
+        const title = document.getElementById('modalFiadoTitle');
+        
+        if (fiado) {
+            // Modo edição
+            title.textContent = 'Editar Fiado';
+            document.getElementById('fiadoIndex').value = fiado.id;
+            document.getElementById('nomeCliente').value = fiado.nome_cliente || '';
+            document.getElementById('telefoneCliente').value = fiado.telefone || '';
+            document.getElementById('prazoPagamento').value = fiado.data_vencimento || '';
+            document.getElementById('dataRetirada').value = fiado.data_fiado || '';
+            document.getElementById('valorPago').value = fiado.valor_pago || 0;
+            document.getElementById('observacoes').value = fiado.observacoes || '';
+            
+            // Carregar produtos do fiado
+            document.getElementById('produtosFiadoContainer').innerHTML = fiado.produtos || '';
+            
+            // Calcular total
+            document.getElementById('fiadoTotal').textContent = `R$ ${formatPrice(fiado.valor_total || 0)}`;
+        } else {
+            // Modo novo fiado
+            title.textContent = 'Novo Fiado';
+            document.getElementById('fiadoForm').reset();
+            document.getElementById('fiadoIndex').value = '';
+            
+            // Limpar produtos
+            document.getElementById('produtosFiadoContainer').innerHTML = '';
+            
+            // Configurar data padrão
+            const hoje = new Date().toISOString().split('T')[0];
+            document.getElementById('prazoPagamento').value = hoje;
+            document.getElementById('dataRetirada').value = hoje;
+            
+            // Resetar total
+            document.getElementById('fiadoTotal').textContent = 'R$ 0,00';
+        }
+        
+        modal.classList.add('active');
+        
+    } catch (error) {
+        console.error('Erro ao abrir modal de fiado:', error);
+        showNotification('❌ Erro ao abrir formulário de fiado', 'error');
+    }
+}
+
+function fecharFiadoModal() {
+    const modal = document.getElementById('fiadoModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function fecharPagamentoModal() {
+    const modal = document.getElementById('pagamentoModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    fiadoSelecionadoId = null;
+}
+
+// Função para registrar pagamento de fiado
+async function confirmarPagamento() {
+    try {
+        const valor = parseFloat(document.getElementById('valorPagamento')?.value || 0);
+        const data = document.getElementById('dataPagamento')?.value;
+        const forma = document.getElementById('formaPagamento')?.value || 'dinheiro';
+        const observacoes = document.getElementById('obsPagamento')?.value || '';
+        
+        if (valor <= 0) {
+            showNotification('❌ Valor do pagamento inválido', 'error');
+            return;
+        }
+        
+        if (!fiadoSelecionadoId) {
+            showNotification('❌ Nenhum fiado selecionado', 'error');
+            return;
+        }
+        
+        const fiado = fiados.find(f => f.id === fiadoSelecionadoId);
+        if (!fiado) {
+            showNotification('❌ Fiado não encontrado', 'error');
+            return;
+        }
+        
+        showNotification('🔄 Registrando pagamento...', 'info');
+        
+        try {
+            // Chamar API para atualizar fiado como pago
+            await neonAPI('update_fiado_pago', { 
+                id: fiadoSelecionadoId,
+                valor_pago: valor,
+                data_pagamento: data,
+                forma_pagamento: forma,
+                observacoes: observacoes
+            });
+            
+            // Atualizar localmente
+            const fiadoIndex = fiados.findIndex(f => f.id === fiadoSelecionadoId);
+            if (fiadoIndex !== -1) {
+                fiados[fiadoIndex].valor_pago = (fiados[fiadoIndex].valor_pago || 0) + valor;
+                if (fiados[fiadoIndex].valor_pago >= fiados[fiadoIndex].valor_total) {
+                    fiados[fiadoIndex].pago = true;
+                }
+            }
+            
+            // Fechar modal
+            fecharPagamentoModal();
+            
+            // Recarregar fiados
+            if (typeof carregarFiados === 'function') {
+                await carregarFiados();
+            }
+            
+            showNotification('✅ Pagamento registrado com sucesso!', 'success');
+            
+        } catch (apiError) {
+            console.error('Erro na API:', apiError);
+            showNotification('⚠️ Pagamento registrado localmente', 'warning');
+            
+            // Atualizar localmente mesmo se API falhar
+            const fiadoIndex = fiados.findIndex(f => f.id === fiadoSelecionadoId);
+            if (fiadoIndex !== -1) {
+                fiados[fiadoIndex].valor_pago = (fiados[fiadoIndex].valor_pago || 0) + valor;
+                if (fiados[fiadoIndex].valor_pago >= fiados[fiadoIndex].valor_total) {
+                    fiados[fiadoIndex].pago = true;
+                }
+                
+                // Recarregar visualização
+                if (typeof carregarFiados === 'function') {
+                    await carregarFiados();
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao registrar pagamento:', error);
+        showNotification('❌ Erro ao registrar pagamento', 'error');
+    }
+}
+
 // ===== TEMPO REAL =====
 function updateDateTime() {
     const now = new Date();
@@ -242,6 +391,8 @@ async function syncData() {
             if (typeof loadProductsForSale === 'function') await loadProductsForSale();
         } else if (activePage === 'fiados') {
             if (typeof carregarFiados === 'function') await carregarFiados();
+        } else if (activePage === 'relatorios') {
+            if (typeof loadReports === 'function') await loadReports();
         }
         
         showNotification('✅ Dados sincronizados!', 'success');
@@ -260,7 +411,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateDateTime();
     setInterval(updateDateTime, 1000);
     
-    // Configurar eventos do modal de produto
+    // ===== CONFIGURAR EVENTOS DO MODAL DE PRODUTO =====
     document.getElementById('closeModal')?.addEventListener('click', fecharModalProduto);
     document.getElementById('cancelModal')?.addEventListener('click', fecharModalProduto);
     document.getElementById('saveProduct')?.addEventListener('click', salvarProduto);
@@ -272,16 +423,36 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
     
-    // Seletor de emoji
-    const emojiPicker = document.getElementById('emojiPicker');
-    if (emojiPicker) {
-        const emojis = ['🍦', '🍨', '🍧', '🎂', '🍰', '🧁', '🍩', '🍪', '🥤', '☕', '🥛', '🧃'];
-        emojiPicker.innerHTML = emojis.map(emoji => `
-            <span class="emoji-option" onclick="selecionarEmoji('${emoji}')">${emoji}</span>
-        `).join('');
+    // ===== CONFIGURAR EVENTOS DO MODAL DE FIADO =====
+    document.getElementById('closeFiadoModal')?.addEventListener('click', fecharFiadoModal);
+    document.getElementById('cancelFiadoModal')?.addEventListener('click', fecharFiadoModal);
+    
+    // Botão de fechar modal de pagamento (se existir)
+    const closePagamentoBtn = document.querySelector('#pagamentoModal button[onclick*="fecharPagamentoModal"]');
+    if (closePagamentoBtn) {
+        closePagamentoBtn.addEventListener('click', fecharPagamentoModal);
     }
     
-    // Configurar navegação
+    // Botão de confirmar pagamento (se existir)
+    const confirmarPagamentoBtn = document.querySelector('#pagamentoModal button[onclick*="confirmarPagamento"]');
+    if (confirmarPagamentoBtn) {
+        confirmarPagamentoBtn.addEventListener('click', confirmarPagamento);
+    }
+    
+    // Fechar modais ao clicar fora
+    document.getElementById('fiadoModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            fecharFiadoModal();
+        }
+    });
+    
+    document.getElementById('pagamentoModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            fecharPagamentoModal();
+        }
+    });
+    
+    // ===== CONFIGURAR NAVEGAÇÃO =====
     const tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(tab => {
         tab.addEventListener('click', async function() {
@@ -321,10 +492,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     });
     
+    // ===== CONFIGURAR BOTÕES GERAIS =====
     // Botão sincronizar
     document.getElementById('syncButton')?.addEventListener('click', syncData);
     
-    // Testar conexão e carregar dados iniciais
+    // Botão novo fiado
+    document.getElementById('novoFiado')?.addEventListener('click', function() {
+        abrirModalFiado();
+    });
+    
+    // Seletor de emoji
+    const emojiPicker = document.getElementById('emojiPicker');
+    if (emojiPicker) {
+        const emojis = ['🍦', '🍨', '🍧', '🎂', '🍰', '🧁', '🍩', '🍪', '🥤', '☕', '🥛', '🧃'];
+        emojiPicker.innerHTML = emojis.map(emoji => `
+            <span class="emoji-option" onclick="selecionarEmoji('${emoji}')">${emoji}</span>
+        `).join('');
+    }
+    
+    // ===== TESTAR CONEXÃO E CARREGAR DADOS INICIAIS =====
     try {
         showNotification('🔌 Conectando ao servidor...', 'info');
         
@@ -356,3 +542,9 @@ window.formatarData = formatarData;
 window.showNotification = showNotification;
 window.neonAPI = neonAPI;
 window.syncData = syncData;
+
+// Funções de fiado
+window.abrirModalFiado = abrirModalFiado;
+window.fecharFiadoModal = fecharFiadoModal;
+window.fecharPagamentoModal = fecharPagamentoModal;
+window.confirmarPagamento = confirmarPagamento;
