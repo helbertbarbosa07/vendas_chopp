@@ -75,6 +75,18 @@ async function neonAPI(action, data) {
     }
 }
 
+// ===== CONTROLE DE VISIBILIDADE DA ABA FIADOS =====
+function toggleFiadoTab(mostrar) {
+    const fiadoTab = document.querySelector('.nav-tab[data-page="fiados"]');
+    if (fiadoTab) {
+        if (mostrar) {
+            fiadoTab.style.display = 'flex';
+        } else {
+            fiadoTab.style.display = 'none';
+        }
+    }
+}
+
 // ===== NAVEGAÇÃO =====
 function navigateTo(pageId) {
     const tab = document.querySelector(`.nav-tab[data-page="${pageId}"]`);
@@ -510,6 +522,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         `).join('');
     }
     
+    // ===== INICIALMENTE ESCONDER A ABA FIADOS =====
+    setTimeout(() => {
+        toggleFiadoTab(false);
+    }, 100);
+    
     // ===== TESTAR CONEXÃO E CARREGAR DADOS INICIAIS =====
     try {
         showNotification('🔌 Conectando ao servidor...', 'info');
@@ -542,6 +559,7 @@ window.formatarData = formatarData;
 window.showNotification = showNotification;
 window.neonAPI = neonAPI;
 window.syncData = syncData;
+window.toggleFiadoTab = toggleFiadoTab;
 
 // Funções de fiado
 window.abrirModalFiado = abrirModalFiado;
