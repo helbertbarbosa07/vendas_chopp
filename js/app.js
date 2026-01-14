@@ -1,6 +1,8 @@
 // ===== CONFIGURAÇÃO GLOBAL =====
 const API_URL = 'https://helbertbarbosa07-vendaschopp.vercel.app/api/neon';
 
+
+
 // Variáveis globais compartilhadas
 let produtos = [];
 let vendas = [];
