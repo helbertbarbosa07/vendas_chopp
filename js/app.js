@@ -521,6 +521,34 @@ document.addEventListener('DOMContentLoaded', async function() {
             <span class="emoji-option" onclick="selecionarEmoji('${emoji}')">${emoji}</span>
         `).join('');
     }
+    <script>
+document.addEventListener("DOMContentLoaded", () => {
+    const pagamentos = document.querySelectorAll('input[name="payment"]');
+    const fiadoContainer = document.getElementById("clienteFiadoContainer");
+    const nomeCliente = document.getElementById("clienteNome");
+    const btnFinalizar = document.getElementById("finalizeSale");
+
+    pagamentos.forEach(radio => {
+        radio.addEventListener("change", () => {
+            if (radio.value === "fiado" && radio.checked) {
+                fiadoContainer.style.display = "block";
+                validarFiado();
+            } else if (radio.checked) {
+                fiadoContainer.style.display = "none";
+                btnFinalizar.disabled = false;
+            }
+        });
+    });
+
+    nomeCliente.addEventListener("input", validarFiado);
+
+    function validarFiado() {
+        const fiadoSelecionado = document.querySelector('input[name="payment"]:checked').value === "fiado";
+        btnFinalizar.disabled = fiadoSelecionado && nomeCliente.value.trim() === "";
+    }
+});
+</script>
+
     
     // ===== INICIALMENTE ESCONDER A ABA FIADOS =====
     setTimeout(() => {
