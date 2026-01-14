@@ -294,16 +294,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     
     // Testar conexão
-    try {
-        showNotification('🔌 Conectando ao servidor...', 'info');
-        produtos = await neonAPI('get_produtos');
-        console.log(`📦 ${produtos.length} produtos carregados`);
-        
-        // Carregar dashboard inicial
-        await loadDashboard();
-        
-    } catch (error) {
-        console.error('❌ Erro na inicialização:', error);
-        showNotification('⚠️ Erro ao conectar com o servidor', 'warning');
-    }
+  try {
+    showNotification('🔌 Conectando ao servidor...', 'info');
+
+    const response = await neonAPI('get_produtos');
+    produtos = response.data || [];
+
+    console.log(`📦 ${produtos.length} produtos carregados`);
+
+    // Carregar dashboard inicial
+    await loadDashboard();
+
+} catch (error) {
+    console.error('❌ Erro na inicialização:', error);
+    showNotification('⚠️ Erro ao conectar com o servidor', 'warning');
+}
+
 });
