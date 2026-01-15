@@ -77,73 +77,79 @@ function renderProdutosList(produtosData) {
     produtosFiltrados.forEach(produto => {
         const cor = produto.cor || '#36B5B0';
         const estoqueStatus = produto.estoque === 0 ? 'ESGOTADO' : 
-                            produto.estoque <= 10 ? 'BAIXO' : 'OK';
+                            produto.estoque <= 10 ? 'BAIXO' : 'OK';// Dentro do loop forEach dos produtos:
+html += `
+    <div class="flavor-card" style="border-color: ${cor}; position: relative;">
+        ${!produto.ativo ? `
+            <div style="position: absolute; top: 10px; right: 10px; background: var(--danger); color: white; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
+                <i class="fas fa-ban"></i> INATIVO
+            </div>
+        ` : ''}
+        
+        ${produto.estoque === 0 && produto.ativo ? `
+            <div style="position: absolute; top: 10px; right: 10px; background: var(--warning); color: white; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
+                <i class="fas fa-exclamation-triangle"></i> ESGOTADO
+            </div>
+        ` : ''}
+        
+        <!-- FOTO DO PRODUTO -->
+        ${produto.foto ? `
+            <img src="${produto.foto}" alt="${produto.nome}" class="produto-foto">
+        ` : `
+            <div class="produto-sem-foto">
+                ${produto.emoji || '🍦'}
+            </div>
+        `}
+        
+        <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 10px; color: var(--dark); text-align: center;">
+            ${produto.nome}
+        </h3>
+        
+        <p style="color: var(--gray); font-size: 14px; margin-bottom: 10px; text-align: center; height: 40px; overflow: hidden;">
+            ${produto.descricao || 'Sem descrição'}
+        </p>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div style="font-size: 20px; font-weight: 900; color: ${cor};">
+                R$ ${formatPrice(produto.preco)}
+            </div>
+            <div style="font-size: 12px; color: ${estoqueColor}; background: ${estoqueColor}22; padding: 4px 8px; border-radius: 15px; font-weight: 700;">
+                <i class="fas fa-box"></i> ${produto.estoque} (${estoqueStatus})
+            </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+            <div style="font-size: 12px; color: var(--gray);">
+                <i class="fas fa-chart-line"></i> ${produto.vendas || 0} vendas
+            </div>
+            
+            <!-- TOGGLE ATIVO/INATIVO -->
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="font-size: 12px; color: var(--gray);">Ativo:</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${produto.ativo ? 'checked' : ''} 
+                           onchange="toggleAtivoProduto(${produto.id}, this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button onclick="abrirModalProduto(${JSON.stringify(produto).replace(/"/g, '&quot;')})" 
+                    style="flex: 2; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                <i class="fas fa-edit"></i> Editar
+            </button>
+            <button onclick="confirmarExclusaoProduto(${produto.id})" 
+                    style="flex: 1; padding: 8px; background: var(--danger); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+`;
         const estoqueColor = produto.estoque === 0 ? 'var(--danger)' : 
                            produto.estoque <= 10 ? 'var(--warning)' : 'var(--success)';
         
-        html += `
-            <div class="flavor-card" style="border-color: ${cor}; position: relative;">
-                ${!produto.ativo ? `
-                    <div style="position: absolute; top: 10px; right: 10px; background: var(--danger); color: white; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
-                        <i class="fas fa-ban"></i> INATIVO
-                    </div>
-                ` : ''}
-                
-                ${produto.estoque === 0 && produto.ativo ? `
-                    <div style="position: absolute; top: 10px; right: 10px; background: var(--warning); color: white; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
-                        <i class="fas fa-exclamation-triangle"></i> ESGOTADO
-                    </div>
-                ` : ''}
-                
-                <div style="font-size: 50px; text-align: center; margin-bottom: 15px;">
-                    ${produto.emoji || '🍦'}
-                </div>
-                
-                <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 10px; color: var(--dark); text-align: center;">
-                    ${produto.nome}
-                </h3>
-                
-                <p style="color: var(--gray); font-size: 14px; margin-bottom: 10px; text-align: center; height: 40px; overflow: hidden;">
-                    ${produto.descricao || 'Sem descrição'}
-                </p>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div style="font-size: 20px; font-weight: 900; color: ${cor};">
-                        R$ ${formatPrice(produto.preco)}
-                    </div>
-                    <div style="font-size: 12px; color: ${estoqueColor}; background: ${estoqueColor}22; padding: 4px 8px; border-radius: 15px; font-weight: 700;">
-                        <i class="fas fa-box"></i> ${produto.estoque} (${estoqueStatus})
-                    </div>
-                </div>
-                
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-                    <div style="font-size: 12px; color: var(--gray);">
-                        <i class="fas fa-chart-line"></i> ${produto.vendas || 0} vendas
-                    </div>
-                    
-                    <!-- TOGGLE ATIVO/INATIVO -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <span style="font-size: 12px; color: var(--gray);">Ativo:</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" ${produto.ativo ? 'checked' : ''} 
-                                   onchange="toggleAtivoProduto(${produto.id}, this.checked)">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="abrirModalProduto(${JSON.stringify(produto).replace(/"/g, '&quot;')})" 
-                            style="flex: 2; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 5px;">
-                        <i class="fas fa-edit"></i> Editar
-                    </button>
-                    <button onclick="confirmarExclusaoProduto(${produto.id})" 
-                            style="flex: 1; padding: 8px; background: var(--danger); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `;
+       
     });
     
     container.innerHTML = html;
