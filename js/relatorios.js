@@ -69,10 +69,6 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
         const produtosResponse = await neonAPI('get_produtos');
         const produtosAtivos = (produtosResponse.data || []).filter(p => p.ativo).length;
         
-        // Buscar fiados
-        const fiadosResponse = await neonAPI('get_fiados');
-        const todosFiados = fiadosResponse.data || [];
-        
         // Filtrar vendas pelo período
         const vendasPeriodo = todasVendas.filter(venda => {
             if (!venda.data) return false;
@@ -88,39 +84,24 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             }
         });
         
-        // Filtrar fiados pelo período
-        const fiadosPeriodo = todosFiados.filter(fiado => {
-            if (!fiado.data_fiado && !fiado.created_at) return false;
-            try {
-                const dataFiado = new Date(fiado.data_fiado || fiado.created_at);
-                const inicio = new Date(dataInicio);
-                const fim = new Date(dataFim);
-                fim.setHours(23, 59, 59);
-                
-                return dataFiado >= inicio && dataFiado <= fim;
-            } catch (e) {
-                return false;
-            }
-        });
-        
         // Calcular totais
         const totalVendas = vendasPeriodo.length;
         const totalFaturamento = vendasPeriodo.reduce((sum, venda) => sum + (parseFloat(venda.total) || 0), 0);
-        const totalFiados = fiadosPeriodo.length;
-        const totalFiadosPendentes = fiadosPeriodo.filter(f => !f.pago).reduce((sum, f) => sum + (parseFloat(f.valor_total) - parseFloat(f.valor_pago || 0)), 0);
         
         // Calcular distribuição de pagamentos
         const pagamentos = {
             dinheiro: 0,
             cartao: 0,
-            pix: 0,
-            fiado: 0
+            pix: 0
         };
         
         vendasPeriodo.forEach(venda => {
             const forma = venda.pagamento || 'dinheiro';
             if (pagamentos[forma] !== undefined) {
                 pagamentos[forma] += parseFloat(venda.total) || 0;
+            } else {
+                // Se for outro tipo de pagamento, coloca em dinheiro
+                pagamentos.dinheiro += parseFloat(venda.total) || 0;
             }
         });
         
@@ -148,9 +129,9 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
                         <div style="font-size: 32px; font-weight: 900;">${produtosAtivos}</div>
                     </div>
                     
-                    <div style="background: linear-gradient(135deg, #FF7BAC, #FF4081); padding: 20px; border-radius: 12px; text-align: center; color: white;">
-                        <div style="font-size: 13px; opacity: 0.9;">FIADOS PENDENTES</div>
-                        <div style="font-size: 32px; font-weight: 900;">R$ ${formatPrice(totalFiadosPendentes)}</div>
+                    <div style="background: linear-gradient(135deg, var(--accent), #FFB347); padding: 20px; border-radius: 12px; text-align: center; color: white;">
+                        <div style="font-size: 13px; opacity: 0.9;">MÉDIA POR VENDA</div>
+                        <div style="font-size: 32px; font-weight: 900;">R$ ${formatPrice(totalVendas > 0 ? totalFaturamento / totalVendas : 0)}</div>
                     </div>
                 </div>
                 
@@ -164,28 +145,109 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
                             <div style="font-size: 24px; color: #4CAF50;">💵</div>
                             <div style="font-size: 14px; font-weight: 700; margin: 5px 0;">Dinheiro</div>
                             <div style="font-size: 18px; font-weight: 900;">R$ ${formatPrice(pagamentos.dinheiro)}</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                                ${totalFaturamento > 0 ? Math.round((pagamentos.dinheiro / totalFaturamento) * 100) : 0}%
+                            </div>
                         </div>
                         
                         <div style="background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                             <div style="font-size: 24px; color: #2196F3;">💳</div>
                             <div style="font-size: 14px; font-weight: 700; margin: 5px 0;">Cartão</div>
                             <div style="font-size: 18px; font-weight: 900;">R$ ${formatPrice(pagamentos.cartao)}</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                                ${totalFaturamento > 0 ? Math.round((pagamentos.cartao / totalFaturamento) * 100) : 0}%
+                            </div>
                         </div>
                         
                         <div style="background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                             <div style="font-size: 24px; color: #9C27B0;">📱</div>
                             <div style="font-size: 14px; font-weight: 700; margin: 5px 0;">PIX</div>
                             <div style="font-size: 18px; font-weight: 900;">R$ ${formatPrice(pagamentos.pix)}</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                                ${totalFaturamento > 0 ? Math.round((pagamentos.pix / totalFaturamento) * 100) : 0}%
+                            </div>
                         </div>
-                        
-                        <div style="background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                            <div style="font-size: 24px; color: #FF9800;">📝</div>
-                            <div style="font-size: 14px; font-weight: 700; margin: 5px 0;">Fiado</div>
-                            <div style="font-size: 18px; font-weight: 900;">R$ ${formatPrice(pagamentos.fiado)}</div>
+                    </div>
+                    
+                    <!-- GRÁFICO DE PIZZA -->
+                    <div style="margin-top: 20px; padding: 15px; background: white; border-radius: 10px;">
+                        <h5 style="margin-bottom: 10px; color: var(--dark); font-size: 14px;">
+                            <i class="fas fa-chart-pie"></i> Visualização Gráfica
+                        </h5>
+                        <div style="display: flex; align-items: center; justify-content: center; height: 200px;">
+                            <canvas id="pagamentosChart"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
+        `;
+        
+        // Adicionar gráfico de pizza
+        html += `
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const ctx = document.getElementById('pagamentosChart');
+                if (!ctx) return;
+                
+                const pagamentosData = {
+                    dinheiro: ${pagamentos.dinheiro},
+                    cartao: ${pagamentos.cartao},
+                    pix: ${pagamentos.pix}
+                };
+                
+                // Destruir gráfico anterior se existir
+                if (window.pagamentosChart instanceof Chart) {
+                    window.pagamentosChart.destroy();
+                }
+                
+                // Criar gráfico de pizza
+                window.pagamentosChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Dinheiro', 'Cartão', 'PIX'],
+                        datasets: [{
+                            data: [pagamentosData.dinheiro, pagamentosData.cartao, pagamentosData.pix],
+                            backgroundColor: [
+                                'rgba(76, 175, 80, 0.7)',
+                                'rgba(33, 150, 243, 0.7)',
+                                'rgba(156, 39, 176, 0.7)'
+                            ],
+                            borderColor: [
+                                'rgba(76, 175, 80, 1)',
+                                'rgba(33, 150, 243, 1)',
+                                'rgba(156, 39, 176, 1)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                        return \`\${label}: R$ \${formatPrice(value)} (\${percentage}%)\`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+            </script>
         `;
         
         if (vendasPeriodo.length > 0) {
@@ -213,11 +275,9 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             
             vendasPeriodo.slice(0, 20).forEach(venda => {
                 const pagamento = venda.pagamento || 'dinheiro';
-                let badgeColor = '#e9ecef';
-                if (pagamento === 'dinheiro') badgeColor = '#d4edda';
-                else if (pagamento === 'cartao') badgeColor = '#d1ecf1';
+                let badgeColor = '#d4edda'; // padrão dinheiro
+                if (pagamento === 'cartao') badgeColor = '#d1ecf1';
                 else if (pagamento === 'pix') badgeColor = '#f8d7da';
-                else if (pagamento === 'fiado') badgeColor = '#fff3cd';
                 
                 html += `
                     <tr>
@@ -241,52 +301,58 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             }
             
             html += `</div>`;
+        } else {
+            html += `
+                <div style="background: #f8f9fa; padding: 30px; border-radius: 15px; margin-top: 20px; text-align: center;">
+                    <i class="fas fa-shopping-cart" style="font-size: 40px; color: var(--gray); margin-bottom: 15px;"></i>
+                    <p style="color: var(--gray);">Nenhuma venda encontrada neste período</p>
+                </div>
+            `;
         }
         
-        if (fiadosPeriodo.length > 0) {
-            html += `
-                <div style="background: #fff3cd; padding: 20px; border-radius: 15px; margin-top: 20px; border: 1px solid #ffeaa7;">
-                    <h4 style="color: #856404; margin-bottom: 15px;">
-                        <i class="fas fa-hand-holding-usd"></i> Fiados do Período (${fiadosPeriodo.length})
-                    </h4>
-                    <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                            <thead>
-                                <tr style="background: #ffeaa7;">
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #fdcb6e;">Cliente</th>
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #fdcb6e;">Data</th>
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #fdcb6e;">Valor</th>
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #fdcb6e;">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
-            
-            fiadosPeriodo.slice(0, 10).forEach(fiado => {
-                const status = fiado.pago ? 'PAGO' : (fiado.data_vencimento && new Date(fiado.data_vencimento) < new Date() ? 'ATRASADO' : 'PENDENTE');
-                let statusColor = '#856404';
-                let statusBg = '#fff3cd';
-                if (status === 'PAGO') {
-                    statusColor = '#155724';
-                    statusBg = '#d4edda';
-                } else if (status === 'ATRASADO') {
-                    statusColor = '#721c24';
-                    statusBg = '#f8d7da';
+        // Adicionar análise por dia da semana
+        if (vendasPeriodo.length > 0) {
+            const vendasPorDia = {};
+            vendasPeriodo.forEach(venda => {
+                if (venda.data) {
+                    const data = new Date(venda.data);
+                    const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'long' });
+                    vendasPorDia[diaSemana] = (vendasPorDia[diaSemana] || 0) + 1;
                 }
-                
-                html += `
-                    <tr>
-                        <td style="padding: 10px; border-bottom: 1px solid #ffeaa7;">${fiado.nome_cliente}</td>
-                        <td style="padding: 10px; border-bottom: 1px solid #ffeaa7;">${formatarData(fiado.data_fiado || fiado.created_at)}</td>
-                        <td style="padding: 10px; border-bottom: 1px solid #ffeaa7; font-weight: 700;">R$ ${formatPrice(fiado.valor_total)}</td>
-                        <td style="padding: 10px; border-bottom: 1px solid #ffeaa7;">
-                            <span style="padding: 4px 8px; border-radius: 10px; background: ${statusBg}; color: ${statusColor}; font-size: 12px; font-weight: 700;">
-                                ${status}
-                            </span>
-                        </td>
-                    </tr>`;
             });
             
-            html += `</tbody></table></div></div>`;
+            if (Object.keys(vendasPorDia).length > 0) {
+                const diaMaisVendas = Object.entries(vendasPorDia).sort((a, b) => b[1] - a[1])[0];
+                
+                html += `
+                    <div style="background: #e8f4f8; padding: 20px; border-radius: 15px; margin-top: 20px; border: 1px solid #b6e0fe;">
+                        <h4 style="color: #0c5460; margin-bottom: 15px;">
+                            <i class="fas fa-calendar-alt"></i> Análise por Dia da Semana
+                        </h4>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                `;
+                
+                Object.entries(vendasPorDia).forEach(([dia, quantidade]) => {
+                    const porcentagem = Math.round((quantidade / totalVendas) * 100);
+                    html += `
+                        <div style="flex: 1; min-width: 120px; background: white; padding: 10px; border-radius: 8px; text-align: center;">
+                            <div style="font-weight: 700; color: #0c5460;">${dia.charAt(0).toUpperCase() + dia.slice(1)}</div>
+                            <div style="font-size: 18px; font-weight: 900; color: var(--primary);">${quantidade}</div>
+                            <div style="font-size: 12px; color: var(--gray);">${porcentagem}% do total</div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                        <div style="margin-top: 15px; padding: 10px; background: #d1ecf1; border-radius: 8px;">
+                            <i class="fas fa-trophy"></i> 
+                            <strong>Dia com mais vendas:</strong> ${diaMaisVendas[0].charAt(0).toUpperCase() + diaMaisVendas[0].slice(1)} 
+                            (${diaMaisVendas[1]} vendas)
+                        </div>
+                    </div>
+                `;
+            }
         }
         
         reportContent.innerHTML = html;
@@ -328,6 +394,8 @@ function imprimirRelatorio() {
                 @media print {
                     .no-print { display: none; }
                     body { margin: 0; }
+                    .payment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+                    canvas { max-width: 300px; margin: 0 auto; }
                 }
             </style>
         </head>
@@ -352,6 +420,56 @@ function imprimirRelatorio() {
         </html>
     `);
     printWindow.document.close();
+}
+
+// ===== EXPORTAÇÃO EM EXCEL =====
+function exportarParaExcel() {
+    try {
+        const tabela = document.querySelector('#reportContent table');
+        if (!tabela) {
+            showNotification('❌ Nenhuma tabela para exportar', 'error');
+            return;
+        }
+        
+        let csv = [];
+        const linhas = tabela.querySelectorAll('tr');
+        
+        for (let i = 0; i < linhas.length; i++) {
+            const linha = [];
+            const cols = linhas[i].querySelectorAll('td, th');
+            
+            for (let j = 0; j < cols.length; j++) {
+                // Limpar formatação HTML
+                let texto = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, '');
+                texto = texto.replace(/(\s\s)/gm, ' ');
+                texto = texto.replace(/"/g, '""');
+                linha.push('"' + texto + '"');
+            }
+            
+            csv.push(linha.join(';'));
+        }
+        
+        const csvContent = csv.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        
+        if (navigator.msSaveBlob) {
+            navigator.msSaveBlob(blob, `relatorio_vendas_${new Date().toISOString().split('T')[0]}.csv`);
+        } else {
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', `relatorio_vendas_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        showNotification('✅ Relatório exportado para CSV', 'success');
+        
+    } catch (error) {
+        console.error('Erro ao exportar para Excel:', error);
+        showNotification('❌ Erro ao exportar relatório', 'error');
+    }
 }
 
 // Configurar botões relatórios
@@ -383,9 +501,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Configurar botão de impressão
     document.getElementById('printReport')?.addEventListener('click', imprimirRelatorio);
+    
+    // Adicionar botão de exportação CSV se não existir
+    const exportButtons = document.querySelector('.export-buttons');
+    if (exportButtons) {
+        if (!document.getElementById('exportExcel')) {
+            exportButtons.innerHTML += `
+                <button class="export-btn" id="exportExcel" style="background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white;">
+                    <i class="fas fa-file-excel"></i>
+                    Exportar Excel
+                </button>
+            `;
+            
+            document.getElementById('exportExcel')?.addEventListener('click', exportarParaExcel);
+        }
+    }
 });
 
 // Exportar funções
 window.loadReportsComFiltro = loadReportsComFiltro;
 window.gerarRelatorioPeriodo = gerarRelatorioPeriodo;
 window.imprimirRelatorio = imprimirRelatorio;
+window.exportarParaExcel = exportarParaExcel;
