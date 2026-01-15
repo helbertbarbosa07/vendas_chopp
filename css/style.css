@@ -910,3 +910,25 @@ body {
 .toggle-switch input:checked + .toggle-slider:before {
     transform: translateX(26px);
 }
+
+/* Estilo para foto do produto no card */
+.produto-foto {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.produto-sem-foto {
+    width: 100%;
+    height: 150px;
+    background: linear-gradient(135deg, var(--primary), #2A9D8F);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    color: white;
+    margin-bottom: 10px;
+}
