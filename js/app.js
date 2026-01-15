@@ -4,11 +4,9 @@ const API_URL = 'https://helbertbarbosa07-vendaschopp.vercel.app/api/neon';
 // Variáveis globais compartilhadas
 let produtos = [];
 let vendas = [];
-let fiados = [];
 let carrinho = [];
 let charts = {};
 let isLoading = false;
-let fiadoSelecionadoId = null;
 
 // ===== FUNÇÕES UTILITÁRIAS GLOBAIS =====
 function formatPrice(value) {
@@ -72,18 +70,6 @@ async function neonAPI(action, data) {
 
     } finally {
         isLoading = false;
-    }
-}
-
-// ===== CONTROLE DE VISIBILIDADE DA ABA FIADOS =====
-function toggleFiadoTab(mostrar) {
-    const fiadoTab = document.querySelector('.nav-tab[data-page="fiados"]');
-    if (fiadoTab) {
-        if (mostrar) {
-            fiadoTab.style.display = 'flex';
-        } else {
-            fiadoTab.style.display = 'none';
-        }
     }
 }
 
@@ -222,277 +208,6 @@ function selecionarEmoji(emoji) {
     document.getElementById('productEmoji').value = emoji;
 }
 
-// ===== FUNÇÕES DE MODAL DE FIADO =====
-function abrirModalFiado(fiado = null) {
-    try {
-        const modal = document.getElementById('fiadoModal');
-        if (!modal) {
-            showNotification('❌ Modal de fiado não encontrado', 'error');
-            return;
-        }
-        
-        const title = document.getElementById('modalFiadoTitle');
-        
-        if (fiado) {
-            // Modo edição
-            title.textContent = 'Editar Fiado';
-            document.getElementById('fiadoIndex').value = fiado.id;
-            document.getElementById('nomeCliente').value = fiado.nome_cliente || '';
-            document.getElementById('telefoneCliente').value = fiado.telefone || '';
-            document.getElementById('prazoPagamento').value = fiado.data_vencimento || '';
-            document.getElementById('dataRetirada').value = fiado.data_fiado || '';
-            document.getElementById('valorPago').value = fiado.valor_pago || 0;
-            document.getElementById('observacoes').value = fiado.observacoes || '';
-            
-            // Carregar produtos do fiado
-            document.getElementById('produtosFiadoContainer').innerHTML = fiado.produtos || '';
-            
-            // Calcular total
-            document.getElementById('fiadoTotal').textContent = `R$ ${formatPrice(fiado.valor_total || 0)}`;
-        } else {
-            // Modo novo fiado
-            title.textContent = 'Novo Fiado';
-            document.getElementById('fiadoForm').reset();
-            document.getElementById('fiadoIndex').value = '';
-            
-            // Limpar produtos
-            document.getElementById('produtosFiadoContainer').innerHTML = '';
-            
-            // Configurar data padrão
-            const hoje = new Date().toISOString().split('T')[0];
-            document.getElementById('prazoPagamento').value = hoje;
-            document.getElementById('dataRetirada').value = hoje;
-            
-            // Resetar total
-            document.getElementById('fiadoTotal').textContent = 'R$ 0,00';
-        }
-        
-        modal.classList.add('active');
-        
-    } catch (error) {
-        console.error('Erro ao abrir modal de fiado:', error);
-        showNotification('❌ Erro ao abrir formulário de fiado', 'error');
-    }
-}
-
-function fecharFiadoModal() {
-    const modal = document.getElementById('fiadoModal');
-    if (modal) {
-        modal.classList.remove('active');
-    }
-}
-
-function fecharPagamentoModal() {
-    const modal = document.getElementById('pagamentoModal');
-    if (modal) {
-        modal.classList.remove('active');
-    }
-    fiadoSelecionadoId = null;
-}
-
-// ===== FUNÇÕES PARA FIADO NA VENDA =====
-function setupFiadoVenda() {
-    const fiadoRadio = document.querySelector('input[name="payment"][value="fiado"]');
-    const fiadoContainer = document.getElementById('clienteFiadoContainer');
-    
-    if (fiadoRadio && fiadoContainer) {
-        fiadoRadio.addEventListener('change', function() {
-            if (this.checked) {
-                fiadoContainer.style.display = 'block';
-            } else {
-                fiadoContainer.style.display = 'none';
-            }
-        });
-    }
-    
-    // Configurar outros radios para esconder container
-    document.querySelectorAll('input[name="payment"]').forEach(radio => {
-        if (radio.value !== 'fiado') {
-            radio.addEventListener('change', function() {
-                if (this.checked && fiadoContainer) {
-                    fiadoContainer.style.display = 'none';
-                }
-            });
-        }
-    });
-}
-
-async function salvarFiadoDaVenda() {
-    try {
-        // Validar dados do cliente
-        const nomeCliente = document.getElementById('clienteNome').value.trim();
-        const telefone = document.getElementById('clienteTelefone').value.trim();
-        
-        if (!nomeCliente) {
-            showNotification('❌ Nome do cliente é obrigatório', 'error');
-            document.getElementById('clienteNome').focus();
-            return;
-        }
-        
-        if (carrinho.length === 0) {
-            showNotification('❌ Carrinho vazio!', 'error');
-            return;
-        }
-        
-        // Criar descrição dos produtos
-        const produtosDesc = carrinho.map(item => 
-            `${item.quantidade}x ${item.nome} (R$ ${formatPrice(item.preco)} cada)`
-        ).join(', ');
-        
-        const valorTotal = carrinho.reduce((sum, item) => sum + item.total, 0);
-        
-        // Data de vencimento (7 dias a partir de hoje)
-        const dataVencimento = new Date();
-        dataVencimento.setDate(dataVencimento.getDate() + 7);
-        
-        const fiadoData = {
-            nome_cliente: nomeCliente,
-            telefone: telefone,
-            produtos: produtosDesc,
-            valor_total: valorTotal,
-            valor_pago: 0,
-            pago: false,
-            data_fiado: new Date().toISOString().split('T')[0],
-            data_vencimento: dataVencimento.toISOString().split('T')[0],
-            observacoes: `Venda fiada registrada via PDV - ${new Date().toLocaleString('pt-BR')}`
-        };
-        
-        showNotification('🔄 Salvando fiado...', 'info');
-        
-        // Salvar fiado na API
-        const response = await neonAPI('create_fiado', fiadoData);
-        
-        if (response.success) {
-            // Atualizar estoque localmente
-            for (const item of carrinho) {
-                const produtoIndex = produtos.findIndex(p => p.id === item.produtoId);
-                if (produtoIndex !== -1) {
-                    produtos[produtoIndex].estoque -= item.quantidade;
-                }
-            }
-            
-            // Limpar carrinho e campos
-            carrinho = [];
-            updateCartDisplay();
-            document.getElementById('clienteNome').value = '';
-            document.getElementById('clienteTelefone').value = '';
-            document.getElementById('clienteFiadoContainer').style.display = 'none';
-            
-            // Desmarcar opção fiado
-            const fiadoRadio = document.querySelector('input[name="payment"][value="fiado"]');
-            const dinheiroRadio = document.querySelector('input[name="payment"][value="dinheiro"]');
-            if (fiadoRadio && dinheiroRadio) {
-                fiadoRadio.checked = false;
-                dinheiroRadio.checked = true;
-            }
-            
-            // Recarregar dashboard e produtos
-            if (typeof loadDashboard === 'function') {
-                setTimeout(async () => {
-                    await loadDashboard();
-                }, 1000);
-            }
-            
-            if (document.getElementById('vendas')?.classList.contains('active')) {
-                if (typeof loadProductsForSale === 'function') {
-                    setTimeout(async () => {
-                        await loadProductsForSale();
-                    }, 500);
-                }
-            }
-            
-            showNotification(`✅ Fiado salvo para ${nomeCliente}! R$ ${formatPrice(valorTotal)}`, 'success');
-            
-        } else {
-            throw new Error(response.error || 'Erro ao salvar fiado');
-        }
-        
-    } catch (error) {
-        console.error('Erro ao salvar fiado:', error);
-        showNotification('❌ Erro ao salvar fiado: ' + error.message, 'error');
-    }
-}
-
-// Função para registrar pagamento de fiado
-async function confirmarPagamento() {
-    try {
-        const valor = parseFloat(document.getElementById('valorPagamento')?.value || 0);
-        const data = document.getElementById('dataPagamento')?.value;
-        const forma = document.getElementById('formaPagamento')?.value || 'dinheiro';
-        const observacoes = document.getElementById('obsPagamento')?.value || '';
-        
-        if (valor <= 0) {
-            showNotification('❌ Valor do pagamento inválido', 'error');
-            return;
-        }
-        
-        if (!fiadoSelecionadoId) {
-            showNotification('❌ Nenhum fiado selecionado', 'error');
-            return;
-        }
-        
-        const fiado = fiados.find(f => f.id === fiadoSelecionadoId);
-        if (!fiado) {
-            showNotification('❌ Fiado não encontrado', 'error');
-            return;
-        }
-        
-        showNotification('🔄 Registrando pagamento...', 'info');
-        
-        try {
-            // Chamar API para atualizar fiado como pago
-            await neonAPI('update_fiado_pago', { 
-                id: fiadoSelecionadoId,
-                valor_pago: valor,
-                data_pagamento: data,
-                forma_pagamento: forma,
-                observacoes: observacoes
-            });
-            
-            // Atualizar localmente
-            const fiadoIndex = fiados.findIndex(f => f.id === fiadoSelecionadoId);
-            if (fiadoIndex !== -1) {
-                fiados[fiadoIndex].valor_pago = (fiados[fiadoIndex].valor_pago || 0) + valor;
-                if (fiados[fiadoIndex].valor_pago >= fiados[fiadoIndex].valor_total) {
-                    fiados[fiadoIndex].pago = true;
-                }
-            }
-            
-            // Fechar modal
-            fecharPagamentoModal();
-            
-            // Recarregar fiados
-            if (typeof carregarFiados === 'function') {
-                await carregarFiados();
-            }
-            
-            showNotification('✅ Pagamento registrado com sucesso!', 'success');
-            
-        } catch (apiError) {
-            console.error('Erro na API:', apiError);
-            showNotification('⚠️ Pagamento registrado localmente', 'warning');
-            
-            // Atualizar localmente mesmo se API falhar
-            const fiadoIndex = fiados.findIndex(f => f.id === fiadoSelecionadoId);
-            if (fiadoIndex !== -1) {
-                fiados[fiadoIndex].valor_pago = (fiados[fiadoIndex].valor_pago || 0) + valor;
-                if (fiados[fiadoIndex].valor_pago >= fiados[fiadoIndex].valor_total) {
-                    fiados[fiadoIndex].pago = true;
-                }
-                
-                // Recarregar visualização
-                if (typeof carregarFiados === 'function') {
-                    await carregarFiados();
-                }
-            }
-        }
-        
-    } catch (error) {
-        console.error('Erro ao registrar pagamento:', error);
-        showNotification('❌ Erro ao registrar pagamento', 'error');
-    }
-}
-
 // ===== TEMPO REAL =====
 function updateDateTime() {
     const now = new Date();
@@ -524,8 +239,6 @@ async function syncData() {
             if (typeof loadAllProducts === 'function') await loadAllProducts();
         } else if (activePage === 'vendas') {
             if (typeof loadProductsForSale === 'function') await loadProductsForSale();
-        } else if (activePage === 'fiados') {
-            if (typeof carregarFiados === 'function') await carregarFiados();
         } else if (activePage === 'relatorios') {
             if (typeof loadReportsComFiltro === 'function') await loadReportsComFiltro();
         }
@@ -558,35 +271,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
     
-    // ===== CONFIGURAR EVENTOS DO MODAL DE FIADO =====
-    document.getElementById('closeFiadoModal')?.addEventListener('click', fecharFiadoModal);
-    document.getElementById('cancelFiadoModal')?.addEventListener('click', fecharFiadoModal);
-    
-    // Botão de fechar modal de pagamento (se existir)
-    const closePagamentoBtn = document.querySelector('#pagamentoModal button[onclick*="fecharPagamentoModal"]');
-    if (closePagamentoBtn) {
-        closePagamentoBtn.addEventListener('click', fecharPagamentoModal);
-    }
-    
-    // Botão de confirmar pagamento (se existir)
-    const confirmarPagamentoBtn = document.querySelector('#pagamentoModal button[onclick*="confirmarPagamento"]');
-    if (confirmarPagamentoBtn) {
-        confirmarPagamentoBtn.addEventListener('click', confirmarPagamento);
-    }
-    
-    // Fechar modais ao clicar fora
-    document.getElementById('fiadoModal')?.addEventListener('click', function(e) {
-        if (e.target === this) {
-            fecharFiadoModal();
-        }
-    });
-    
-    document.getElementById('pagamentoModal')?.addEventListener('click', function(e) {
-        if (e.target === this) {
-            fecharPagamentoModal();
-        }
-    });
-    
     // ===== CONFIGURAR NAVEGAÇÃO =====
     const tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(tab => {
@@ -614,8 +298,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                         if (typeof loadProductsForSale === 'function') await loadProductsForSale();
                     } else if (pageId === 'produtos') {
                         if (typeof loadAllProducts === 'function') await loadAllProducts();
-                    } else if (pageId === 'fiados') {
-                        if (typeof carregarFiados === 'function') await carregarFiados();
                     } else if (pageId === 'relatorios') {
                         if (typeof loadReportsComFiltro === 'function') await loadReportsComFiltro();
                     }
@@ -631,11 +313,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Botão sincronizar
     document.getElementById('syncButton')?.addEventListener('click', syncData);
     
-    // Botão novo fiado
-    document.getElementById('novoFiado')?.addEventListener('click', function() {
-        abrirModalFiado();
-    });
-    
     // Botão novo produto
     document.getElementById('addProduct')?.addEventListener('click', function() {
         abrirModalProduto();
@@ -649,14 +326,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             <span class="emoji-option" onclick="selecionarEmoji('${emoji}')">${emoji}</span>
         `).join('');
     }
-    
-    // ===== CONFIGURAR FIADO NA VENDA =====
-    setupFiadoVenda();
-    
-    // ===== INICIALMENTE ESCONDER A ABA FIADOS =====
-    setTimeout(() => {
-        toggleFiadoTab(false);
-    }, 100);
     
     // ===== TESTAR CONEXÃO E CARREGAR DADOS INICIAIS =====
     try {
@@ -690,14 +359,3 @@ window.formatarData = formatarData;
 window.showNotification = showNotification;
 window.neonAPI = neonAPI;
 window.syncData = syncData;
-window.toggleFiadoTab = toggleFiadoTab;
-
-// Funções de fiado
-window.abrirModalFiado = abrirModalFiado;
-window.fecharFiadoModal = fecharFiadoModal;
-window.fecharPagamentoModal = fecharPagamentoModal;
-window.confirmarPagamento = confirmarPagamento;
-window.salvarFiadoDaVenda = salvarFiadoDaVenda;
-
-// Funções de dashboard
-window.loadVendasMensaisChart = loadVendasMensaisChart;
