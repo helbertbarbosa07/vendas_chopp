@@ -67,7 +67,24 @@ export default async function handler(req, res) {
                         error: 'ID do produto não informado'
                     });
                 }
+                // Adicione este case no switch do neon.js:
 
+            case 'get_itens_venda':
+                if (!data?.id) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'ID da venda não informado'
+                    });
+                }
+                
+                result = await sql`
+                    SELECT vi.*, p.nome as produto_nome, p.emoji as produto_emoji
+                    FROM venda_itens vi
+                    LEFT JOIN produtos p ON vi.produto_id = p.id
+                    WHERE vi.venda_id = ${data.id}
+                    ORDER BY vi.id
+                `;
+                break;
                 // Construir query dinamicamente para evitar campos undefined
                 const updateFields = [];
                 const updateValues = [];
