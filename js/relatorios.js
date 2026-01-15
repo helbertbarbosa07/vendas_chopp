@@ -59,15 +59,16 @@ async function loadReportsComFiltro() {
 async function gerarRelatorioPeriodo(dataInicio, dataFim) {
     try {
         const reportContent = document.getElementById('reportContent');
-        reportContent.innerHTML = '<div style="text-align: center; padding: 60px 20px;"><i class="fas fa-spinner fa-spin"></i><p>Gerando relatório...</p></div>';
+        reportContent.innerHTML = '<div style="text-align: center; padding: 60px 20px;"><i class="fas fa-spinner fa-spin"></i><p>Gerando relatório detalhado...</p></div>';
         
-        // Buscar todas as vendas para filtrar
+        // Buscar todas as vendas com detalhes dos produtos
         const response = await neonAPI('get_relatorio_completo');
         const todasVendas = response.data?.vendasRecentes || [];
         
-        // Buscar produtos ativos
+        // Buscar produtos ativos para estatísticas
         const produtosResponse = await neonAPI('get_produtos');
-        const produtosAtivos = (produtosResponse.data || []).filter(p => p.ativo).length;
+        const todosProdutos = produtosResponse.data || [];
+        const produtosAtivos = todosProdutos.filter(p => p.ativo).length;
         
         // Filtrar vendas pelo período
         const vendasPeriodo = todasVendas.filter(venda => {
@@ -84,9 +85,73 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             }
         });
         
+        // Para cada venda, buscar os itens detalhados
+        const vendasDetalhadas = [];
+        
+        for (const venda of vendasPeriodo) {
+            try {
+                // Buscar itens da venda com nomes dos produtos
+                const itensResponse = await neonAPI('get_itens_venda', { id: venda.id });
+                const itensVenda = itensResponse.data || [];
+                
+                // Adicionar nomes dos produtos aos itens
+                const itensComNomes = await Promise.all(itensVenda.map(async (item) => {
+                    const produto = todosProdutos.find(p => p.id === item.produto_id);
+                    return {
+                        ...item,
+                        produto_nome: produto?.nome || 'Produto Desconhecido',
+                        produto_emoji: produto?.emoji || '📦',
+                        produto_cor: produto?.cor || '#36B5B0'
+                    };
+                }));
+                
+                vendasDetalhadas.push({
+                    ...venda,
+                    itens: itensComNomes
+                });
+                
+            } catch (error) {
+                console.error(`Erro ao buscar itens da venda ${venda.id}:`, error);
+                // Se não conseguir os itens, usar dados básicos
+                vendasDetalhadas.push({
+                    ...venda,
+                    itens: []
+                });
+            }
+        }
+        
         // Calcular totais
-        const totalVendas = vendasPeriodo.length;
-        const totalFaturamento = vendasPeriodo.reduce((sum, venda) => sum + (parseFloat(venda.total) || 0), 0);
+        const totalVendas = vendasDetalhadas.length;
+        const totalFaturamento = vendasDetalhadas.reduce((sum, venda) => sum + (parseFloat(venda.total) || 0), 0);
+        
+        // Calcular produtos mais vendidos no período
+        const produtosVendidos = {};
+        vendasDetalhadas.forEach(venda => {
+            venda.itens.forEach(item => {
+                const produtoId = item.produto_id;
+                const produtoNome = item.produto_nome;
+                const quantidade = parseFloat(item.quantidade) || 0;
+                const preco = parseFloat(item.preco) || 0;
+                
+                if (!produtosVendidos[produtoId]) {
+                    produtosVendidos[produtoId] = {
+                        nome: produtoNome,
+                        emoji: item.produto_emoji,
+                        cor: item.produto_cor,
+                        quantidade: 0,
+                        total: 0
+                    };
+                }
+                
+                produtosVendidos[produtoId].quantidade += quantidade;
+                produtosVendidos[produtoId].total += quantidade * preco;
+            });
+        });
+        
+        // Ordenar produtos por quantidade vendida
+        const produtosMaisVendidos = Object.values(produtosVendidos)
+            .sort((a, b) => b.quantidade - a.quantidade)
+            .slice(0, 5); // Top 5 produtos
         
         // Calcular distribuição de pagamentos
         const pagamentos = {
@@ -95,12 +160,11 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             pix: 0
         };
         
-        vendasPeriodo.forEach(venda => {
+        vendasDetalhadas.forEach(venda => {
             const forma = venda.pagamento || 'dinheiro';
             if (pagamentos[forma] !== undefined) {
                 pagamentos[forma] += parseFloat(venda.total) || 0;
             } else {
-                // Se for outro tipo de pagamento, coloca em dinheiro
                 pagamentos.dinheiro += parseFloat(venda.total) || 0;
             }
         });
@@ -109,7 +173,7 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid var(--primary);">
                     <h3 style="color: var(--dark); font-size: 22px;">
-                        <i class="fas fa-chart-bar"></i> Relatório - ${formatarData(dataInicio)} até ${formatarData(dataFim)}
+                        <i class="fas fa-chart-bar"></i> Relatório Detalhado - ${formatarData(dataInicio)} até ${formatarData(dataFim)}
                     </h3>
                 </div>
                 
@@ -134,6 +198,32 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
                         <div style="font-size: 32px; font-weight: 900;">R$ ${formatPrice(totalVendas > 0 ? totalFaturamento / totalVendas : 0)}</div>
                     </div>
                 </div>
+                
+                <!-- PRODUTOS MAIS VENDIDOS -->
+                ${produtosMaisVendidos.length > 0 ? `
+                <div style="background: #f0f9ff; padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #b6e0fe;">
+                    <h4 style="color: #0c5460; margin-bottom: 15px;">
+                        <i class="fas fa-crown"></i> Produtos Mais Vendidos
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                ` : ''}
+                
+                ${produtosMaisVendidos.map((produto, index) => `
+                    <div style="background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <div style="font-size: 30px; margin-bottom: 10px; color: ${produto.cor};">${produto.emoji}</div>
+                        <div style="font-size: 14px; font-weight: 700; margin-bottom: 5px; color: var(--dark);">${produto.nome}</div>
+                        <div style="font-size: 18px; font-weight: 900; color: var(--primary);">${produto.quantidade} un.</div>
+                        <div style="font-size: 14px; color: var(--gray);">R$ ${formatPrice(produto.total)}</div>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px; background: #f8f9fa; padding: 3px 8px; border-radius: 10px;">
+                            #${index + 1} mais vendido
+                        </div>
+                    </div>
+                `).join('')}
+                
+                ${produtosMaisVendidos.length > 0 ? `
+                    </div>
+                </div>
+                ` : ''}
                 
                 <!-- DISTRIBUIÇÃO DE PAGAMENTOS -->
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 15px; margin-bottom: 20px;">
@@ -168,135 +258,109 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- GRÁFICO DE PIZZA -->
-                    <div style="margin-top: 20px; padding: 15px; background: white; border-radius: 10px;">
-                        <h5 style="margin-bottom: 10px; color: var(--dark); font-size: 14px;">
-                            <i class="fas fa-chart-pie"></i> Visualização Gráfica
-                        </h5>
-                        <div style="display: flex; align-items: center; justify-content: center; height: 200px;">
-                            <canvas id="pagamentosChart"></canvas>
-                        </div>
-                    </div>
                 </div>
             </div>
         `;
         
-        // Adicionar gráfico de pizza
-        html += `
-            <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                const ctx = document.getElementById('pagamentosChart');
-                if (!ctx) return;
-                
-                const pagamentosData = {
-                    dinheiro: ${pagamentos.dinheiro},
-                    cartao: ${pagamentos.cartao},
-                    pix: ${pagamentos.pix}
-                };
-                
-                // Destruir gráfico anterior se existir
-                if (window.pagamentosChart instanceof Chart) {
-                    window.pagamentosChart.destroy();
-                }
-                
-                // Criar gráfico de pizza
-                window.pagamentosChart = new Chart(ctx, {
-                    type: 'pie',
-                    data: {
-                        labels: ['Dinheiro', 'Cartão', 'PIX'],
-                        datasets: [{
-                            data: [pagamentosData.dinheiro, pagamentosData.cartao, pagamentosData.pix],
-                            backgroundColor: [
-                                'rgba(76, 175, 80, 0.7)',
-                                'rgba(33, 150, 243, 0.7)',
-                                'rgba(156, 39, 176, 0.7)'
-                            ],
-                            borderColor: [
-                                'rgba(76, 175, 80, 1)',
-                                'rgba(33, 150, 243, 1)',
-                                'rgba(156, 39, 176, 1)'
-                            ],
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    font: {
-                                        size: 12
-                                    }
-                                }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const label = context.label || '';
-                                        const value = context.parsed;
-                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                                        return \`\${label}: R$ \${formatPrice(value)} (\${percentage}%)\`;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            });
-            </script>
-        `;
-        
-        if (vendasPeriodo.length > 0) {
+        // HISTÓRICO DETALHADO DE VENDAS
+        if (vendasDetalhadas.length > 0) {
             html += `
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 15px; margin-top: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h4 style="color: var(--dark); margin: 0;">
-                            <i class="fas fa-history"></i> Vendas do Período (${vendasPeriodo.length})
+                            <i class="fas fa-history"></i> Histórico Detalhado de Vendas (${vendasDetalhadas.length})
                         </h4>
                         <span style="font-size: 14px; color: var(--gray);">
                             Média: R$ ${formatPrice(totalVendas > 0 ? totalFaturamento / totalVendas : 0)}
                         </span>
                     </div>
-                    <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                            <thead>
-                                <tr style="background: white;">
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Data</th>
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Hora</th>
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Valor</th>
-                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Pagamento</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
+            `;
             
-            vendasPeriodo.slice(0, 20).forEach(venda => {
-                const pagamento = venda.pagamento || 'dinheiro';
-                let badgeColor = '#d4edda'; // padrão dinheiro
-                if (pagamento === 'cartao') badgeColor = '#d1ecf1';
-                else if (pagamento === 'pix') badgeColor = '#f8d7da';
-                
-                html += `
-                    <tr>
-                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${formatarData(venda.data)}</td>
-                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">${venda.hora || '--:--'}</td>
-                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6; font-weight: 700;">R$ ${formatPrice(venda.total)}</td>
-                        <td style="padding: 10px; border-bottom: 1px solid #dee2e6;">
-                            <span style="padding: 4px 8px; border-radius: 10px; background: ${badgeColor}; font-size: 12px; font-weight: 700;">
-                                ${pagamento}
-                            </span>
-                        </td>
-                    </tr>`;
+            // Agrupar vendas por data
+            const vendasPorData = {};
+            vendasDetalhadas.forEach(venda => {
+                const data = venda.data;
+                if (!vendasPorData[data]) {
+                    vendasPorData[data] = [];
+                }
+                vendasPorData[data].push(venda);
             });
             
-            html += `</tbody></table></div>`;
+            // Ordenar datas
+            const datasOrdenadas = Object.keys(vendasPorData).sort((a, b) => new Date(b) - new Date(a));
             
-            if (vendasPeriodo.length > 20) {
+            datasOrdenadas.forEach(data => {
+                const vendasDoDia = vendasPorData[data];
+                const totalDia = vendasDoDia.reduce((sum, v) => sum + (parseFloat(v.total) || 0), 0);
+                
+                html += `
+                    <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid var(--primary);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                            <div style="font-weight: 700; color: var(--dark);">
+                                <i class="fas fa-calendar-day"></i> ${formatarData(data)}
+                            </div>
+                            <div style="font-weight: 900; color: var(--primary);">
+                                ${vendasDoDia.length} vendas • R$ ${formatPrice(totalDia)}
+                            </div>
+                        </div>
+                `;
+                
+                vendasDoDia.forEach((venda, vendaIndex) => {
+                    const pagamento = venda.pagamento || 'dinheiro';
+                    let badgeColor = '#d4edda';
+                    if (pagamento === 'cartao') badgeColor = '#d1ecf1';
+                    else if (pagamento === 'pix') badgeColor = '#f8d7da';
+                    
+                    html += `
+                        <div style="margin-bottom: ${vendaIndex < vendasDoDia.length - 1 ? '15px' : '0'}; padding-bottom: ${vendaIndex < vendasDoDia.length - 1 ? '15px' : '0'}; border-bottom: ${vendaIndex < vendasDoDia.length - 1 ? '1px dashed #eee' : 'none'};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div>
+                                    <span style="font-weight: 700; color: var(--dark);">${venda.hora || '--:--'}</span>
+                                    <span style="padding: 2px 8px; border-radius: 10px; background: ${badgeColor}; font-size: 11px; font-weight: 700; margin-left: 10px;">
+                                        ${pagamento}
+                                    </span>
+                                </div>
+                                <div style="font-weight: 900; color: var(--primary);">
+                                    R$ ${formatPrice(venda.total)}
+                                </div>
+                            </div>
+                            
+                            <!-- PRODUTOS DA VENDA -->
+                            ${venda.itens.length > 0 ? `
+                            <div style="background: #fafafa; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px; font-weight: 700;">
+                                    <i class="fas fa-box"></i> Produtos Vendidos:
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ` : ''}
+                            
+                            ${venda.itens.map(item => `
+                                <div style="display: flex; align-items: center; background: white; padding: 5px 10px; border-radius: 6px; border: 1px solid #eee; font-size: 11px;">
+                                    <span style="color: ${item.produto_cor}; margin-right: 5px;">${item.produto_emoji}</span>
+                                    <span style="font-weight: 700; color: var(--dark); margin-right: 8px;">${item.produto_nome}</span>
+                                    <span style="color: var(--gray); margin-right: 5px;">${item.quantidade}x</span>
+                                    <span style="font-weight: 700; color: var(--primary);">R$ ${formatPrice(item.preco)}</span>
+                                </div>
+                            `).join('')}
+                            
+                            ${venda.itens.length > 0 ? `
+                                </div>
+                            </div>
+                            ` : `
+                            <div style="font-size: 11px; color: var(--gray); font-style: italic;">
+                                <i class="fas fa-info-circle"></i> Detalhes dos produtos não disponíveis
+                            </div>
+                            `}
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            });
+            
+            if (vendasDetalhadas.length > 20) {
                 html += `<div style="text-align: center; margin-top: 10px; font-size: 12px; color: var(--gray);">
-                    ... e mais ${vendasPeriodo.length - 20} vendas
+                    ... totalizando ${vendasDetalhadas.length} vendas no período
                 </div>`;
             }
             
@@ -310,45 +374,80 @@ async function gerarRelatorioPeriodo(dataInicio, dataFim) {
             `;
         }
         
-        // Adicionar análise por dia da semana
-        if (vendasPeriodo.length > 0) {
-            const vendasPorDia = {};
-            vendasPeriodo.forEach(venda => {
+        // RESUMO POR DIA DA SEMANA
+        if (vendasDetalhadas.length > 0) {
+            const vendasPorDiaSemana = {};
+            vendasDetalhadas.forEach(venda => {
                 if (venda.data) {
                     const data = new Date(venda.data);
-                    const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'long' });
-                    vendasPorDia[diaSemana] = (vendasPorDia[diaSemana] || 0) + 1;
+                    const diaSemana = data.getDay(); // 0 = domingo, 1 = segunda, etc
+                    const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+                    const diaNome = dias[diaSemana];
+                    
+                    if (!vendasPorDiaSemana[diaNome]) {
+                        vendasPorDiaSemana[diaNome] = {
+                            quantidade: 0,
+                            total: 0
+                        };
+                    }
+                    
+                    vendasPorDiaSemana[diaNome].quantidade++;
+                    vendasPorDiaSemana[diaNome].total += parseFloat(venda.total) || 0;
                 }
             });
             
-            if (Object.keys(vendasPorDia).length > 0) {
-                const diaMaisVendas = Object.entries(vendasPorDia).sort((a, b) => b[1] - a[1])[0];
+            if (Object.keys(vendasPorDiaSemana).length > 0) {
+                const diaMaisVendas = Object.entries(vendasPorDiaSemana).sort((a, b) => b[1].quantidade - a[1].quantidade)[0];
+                const diaMaisFaturamento = Object.entries(vendasPorDiaSemana).sort((a, b) => b[1].total - a[1].total)[0];
                 
                 html += `
                     <div style="background: #e8f4f8; padding: 20px; border-radius: 15px; margin-top: 20px; border: 1px solid #b6e0fe;">
                         <h4 style="color: #0c5460; margin-bottom: 15px;">
                             <i class="fas fa-calendar-alt"></i> Análise por Dia da Semana
                         </h4>
-                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
                 `;
                 
-                Object.entries(vendasPorDia).forEach(([dia, quantidade]) => {
-                    const porcentagem = Math.round((quantidade / totalVendas) * 100);
-                    html += `
-                        <div style="flex: 1; min-width: 120px; background: white; padding: 10px; border-radius: 8px; text-align: center;">
-                            <div style="font-weight: 700; color: #0c5460;">${dia.charAt(0).toUpperCase() + dia.slice(1)}</div>
-                            <div style="font-size: 18px; font-weight: 900; color: var(--primary);">${quantidade}</div>
-                            <div style="font-size: 12px; color: var(--gray);">${porcentagem}% do total</div>
-                        </div>
-                    `;
+                const diasOrdenados = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+                
+                diasOrdenados.forEach(dia => {
+                    const dados = vendasPorDiaSemana[dia];
+                    if (dados) {
+                        const porcentagem = Math.round((dados.quantidade / totalVendas) * 100);
+                        html += `
+                            <div style="background: white; padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="font-weight: 700; color: #0c5460; font-size: 12px;">${dia}</div>
+                                <div style="font-size: 16px; font-weight: 900; color: var(--primary);">${dados.quantidade}</div>
+                                <div style="font-size: 11px; color: var(--gray);">${porcentagem}%</div>
+                                <div style="font-size: 10px; color: var(--success); margin-top: 3px;">
+                                    R$ ${formatPrice(dados.total)}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; text-align: center; opacity: 0.5;">
+                                <div style="font-weight: 700; color: #999; font-size: 12px;">${dia}</div>
+                                <div style="font-size: 16px; font-weight: 900; color: #ccc;">0</div>
+                                <div style="font-size: 11px; color: #ccc;">0%</div>
+                            </div>
+                        `;
+                    }
                 });
                 
                 html += `
                         </div>
-                        <div style="margin-top: 15px; padding: 10px; background: #d1ecf1; border-radius: 8px;">
-                            <i class="fas fa-trophy"></i> 
-                            <strong>Dia com mais vendas:</strong> ${diaMaisVendas[0].charAt(0).toUpperCase() + diaMaisVendas[0].slice(1)} 
-                            (${diaMaisVendas[1]} vendas)
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                            <div style="padding: 10px; background: #d1ecf1; border-radius: 8px;">
+                                <i class="fas fa-trophy"></i> 
+                                <strong>Dia com mais vendas:</strong><br>
+                                ${diaMaisVendas[0]} (${diaMaisVendas[1].quantidade} vendas)
+                            </div>
+                            <div style="padding: 10px; background: #d1ecf1; border-radius: 8px;">
+                                <i class="fas fa-money-bill-wave"></i> 
+                                <strong>Maior faturamento:</strong><br>
+                                ${diaMaisFaturamento[0]} (R$ ${formatPrice(diaMaisFaturamento[1].total)})
+                            </div>
                         </div>
                     </div>
                 `;
@@ -391,17 +490,18 @@ function imprimirRelatorio() {
                 th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
                 th { background-color: #f5f5f5; }
                 .badge { padding: 3px 8px; border-radius: 10px; font-size: 11px; }
+                .product-item { display: flex; align-items: center; margin: 3px 0; }
+                .product-emoji { margin-right: 5px; }
                 @media print {
                     .no-print { display: none; }
                     body { margin: 0; }
                     .payment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-                    canvas { max-width: 300px; margin: 0 auto; }
                 }
             </style>
         </head>
         <body>
             <div style="text-align: center; margin-bottom: 20px;">
-                <h1>🍦 Chop Manager PRO</h1>
+                <h1>🍦 Chop Manager PRO - Relatório Detalhado</h1>
                 <p>Relatório Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
             </div>
             ${reportContent}
@@ -420,56 +520,6 @@ function imprimirRelatorio() {
         </html>
     `);
     printWindow.document.close();
-}
-
-// ===== EXPORTAÇÃO EM EXCEL =====
-function exportarParaExcel() {
-    try {
-        const tabela = document.querySelector('#reportContent table');
-        if (!tabela) {
-            showNotification('❌ Nenhuma tabela para exportar', 'error');
-            return;
-        }
-        
-        let csv = [];
-        const linhas = tabela.querySelectorAll('tr');
-        
-        for (let i = 0; i < linhas.length; i++) {
-            const linha = [];
-            const cols = linhas[i].querySelectorAll('td, th');
-            
-            for (let j = 0; j < cols.length; j++) {
-                // Limpar formatação HTML
-                let texto = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, '');
-                texto = texto.replace(/(\s\s)/gm, ' ');
-                texto = texto.replace(/"/g, '""');
-                linha.push('"' + texto + '"');
-            }
-            
-            csv.push(linha.join(';'));
-        }
-        
-        const csvContent = csv.join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        
-        if (navigator.msSaveBlob) {
-            navigator.msSaveBlob(blob, `relatorio_vendas_${new Date().toISOString().split('T')[0]}.csv`);
-        } else {
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute('download', `relatorio_vendas_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-        
-        showNotification('✅ Relatório exportado para CSV', 'success');
-        
-    } catch (error) {
-        console.error('Erro ao exportar para Excel:', error);
-        showNotification('❌ Erro ao exportar relatório', 'error');
-    }
 }
 
 // Configurar botões relatórios
@@ -501,25 +551,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Configurar botão de impressão
     document.getElementById('printReport')?.addEventListener('click', imprimirRelatorio);
-    
-    // Adicionar botão de exportação CSV se não existir
-    const exportButtons = document.querySelector('.export-buttons');
-    if (exportButtons) {
-        if (!document.getElementById('exportExcel')) {
-            exportButtons.innerHTML += `
-                <button class="export-btn" id="exportExcel" style="background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white;">
-                    <i class="fas fa-file-excel"></i>
-                    Exportar Excel
-                </button>
-            `;
-            
-            document.getElementById('exportExcel')?.addEventListener('click', exportarParaExcel);
-        }
-    }
 });
 
 // Exportar funções
 window.loadReportsComFiltro = loadReportsComFiltro;
 window.gerarRelatorioPeriodo = gerarRelatorioPeriodo;
 window.imprimirRelatorio = imprimirRelatorio;
-window.exportarParaExcel = exportarParaExcel;
