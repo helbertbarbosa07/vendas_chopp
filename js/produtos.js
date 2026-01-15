@@ -77,8 +77,11 @@ function renderProdutosList(produtosData) {
     produtosFiltrados.forEach(produto => {
         const cor = produto.cor || '#36B5B0';
         const estoqueStatus = produto.estoque === 0 ? 'ESGOTADO' : 
-                            produto.estoque <= 10 ? 'BAIXO' : 'OK';// Dentro do loop forEach dos produtos:
-html += `
+                            produto.estoque <= 10 ? 'BAIXO' : 'OK';
+        const estoqueColor = produto.estoque === 0 ? 'var(--danger)' : 
+                           produto.estoque <= 10 ? 'var(--warning)' : 'var(--success)';
+        
+        html += `
     <div class="flavor-card" style="border-color: ${cor}; position: relative;">
         ${!produto.ativo ? `
             <div style="position: absolute; top: 10px; right: 10px; background: var(--danger); color: white; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
@@ -146,10 +149,6 @@ html += `
         </div>
     </div>
 `;
-        const estoqueColor = produto.estoque === 0 ? 'var(--danger)' : 
-                           produto.estoque <= 10 ? 'var(--warning)' : 'var(--success)';
-        
-       
     });
     
     container.innerHTML = html;
@@ -191,6 +190,7 @@ async function toggleAtivoProduto(produtoId, estaAtivo) {
         await loadAllProducts(); // Reverter visualmente
     }
 }
+
 async function confirmarExclusaoProduto(produtoId) {
     try {
         const produto = produtos.find(p => p.id === produtoId);
@@ -230,7 +230,9 @@ async function confirmarExclusaoProduto(produtoId) {
         showNotification('❌ Erro: ' + error.message, 'error');
         await loadAllProducts();
     }
-}// Exportar funções
+}
+
+// Exportar funções
 window.loadAllProducts = loadAllProducts;
 window.toggleAtivoProduto = toggleAtivoProduto;
 window.confirmarExclusaoProduto = confirmarExclusaoProduto;
