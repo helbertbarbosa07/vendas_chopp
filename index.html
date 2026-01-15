@@ -7,12 +7,11 @@
     <!--CSS-->
     <link rel="stylesheet" href="css/style.css">
     
-    <title>🍦 Chop Manager PRO - Sistema Completo TESTW</title>
+    <title>🍦 Chop Manager PRO - Sistema Completo</title>
     <script src="js/app.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/vendas.js"></script>
     <script src="js/produtos.js"></script>
-    <script src="js/fiados.js"></script>
     <script src="js/relatorios.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -71,9 +70,6 @@
             <button class="nav-tab" data-page="produtos">
                 <i class="fas fa-ice-cream"></i> Produtos
             </button>
-            <button class="nav-tab" data-page="fiados">
-                <i class="fas fa-hand-holding-usd"></i> Fiados
-            </button>
             <button class="nav-tab" data-page="relatorios">
                 <i class="fas fa-chart-pie"></i> Relatórios
             </button>
@@ -124,7 +120,8 @@
                         </div>
                     </div>
                 </div>
-              <!-- GRÁFICO MENSAL -->
+                
+                <!-- GRÁFICO MENSAL -->
                 <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow); margin: 30px 0;">
                     <h3 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
                         <i class="fas fa-chart-line"></i> Vendas Mensais
@@ -262,39 +259,9 @@
                                     <div class="payment-name">PIX</div>
                                 </div>
                             </label>
-                            
-                           <label class="payment-option">
-                                <input type="radio" name="payment" value="fiado">
-                                <div class="payment-card">
-                                    <span class="payment-icon">📝</span>
-                                    <div class="payment-name">Fiado</div>
-                                </div>
-                            </label>
                         </div>
                     </div>
-                   
-                    <div id="clienteFiadoContainer" style="display: none; margin: 20px 0;">
-                        <h4 style="margin-bottom: 15px; color: var(--dark); font-size: 18px;">
-                            <i class="fas fa-user"></i> Dados do Cliente (Fiado)
-                        </h4>
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 15px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                                <div>
-                                    <label style="display: block; margin-bottom: 5px; font-weight: 700;">Nome do Cliente *</label>
-                                    <input type="text" id="clienteNome" placeholder="Nome completo" 
-                                           style="width: 100%; padding: 12px; border: 2px solid #dee2e6; border-radius: 10px;">
-                                </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 5px; font-weight: 700;">Telefone</label>
-                                    <input type="text" id="clienteTelefone" placeholder="(11) 99999-9999" 
-                                           style="width: 100%; padding: 12px; border: 2px solid #dee2e6; border-radius: 10px;">
-                                </div>
-                            </div>
-                            <button onclick="salvarFiadoDaVenda()" style="width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: 700;">
-                                <i class="fas fa-save"></i> Salvar Fiado
-                            </button>
-                        </div>
-                    </div>
+                    
                     <button class="btn-primary" id="finalizeSale" disabled style="width: 100%;">
                         <i class="fas fa-check-circle"></i>
                         FINALIZAR VENDA
@@ -343,91 +310,6 @@
                     <div class="loading" style="grid-column: 1 / -1;">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando produtos...</p>
-                    </div>
-                </div>
-            </section>
-            
-            <!-- FIADOS -->
-            <section id="fiados" class="page">
-                <div class="page-title">
-                    <i class="fas fa-hand-holding-usd"></i>
-                    <h2>Controle de Fiados</h2>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <p style="color: var(--gray); font-size: 16px;">
-                        Gerencie vendas fiadas e recebimentos
-                    </p>
-                    <button class="btn-primary" id="novoFiado" style="padding: 12px 25px; font-size: 16px;">
-                        <i class="fas fa-plus"></i>
-                        Novo Fiado
-                    </button>
-                </div>
-                
-                <!-- RESUMO DE FIADOS -->
-                <div class="stats-grid" style="margin-bottom: 30px;">
-                    <div class="stat-card">
-                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Total a Receber</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--dark);" id="totalReceber">R$ 0,00</div>
-                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
-                            <i class="fas fa-money-bill-wave"></i>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Recebido Mês</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--success);" id="recebidoMes">R$ 0,00</div>
-                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
-                            <i class="fas fa-cash-register"></i>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Clientes em Atraso</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--danger);" id="clientesAtraso">0</div>
-                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
-                            <i class="fas fa-exclamation-circle"></i>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div style="font-size: 14px; color: var(--gray); margin-bottom: 10px;">Fiados Ativos</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--warning);" id="fiadosAtivos">0</div>
-                        <div style="position: absolute; right: 20px; top: 20px; font-size: 30px; opacity: 0.1;">
-                            <i class="fas fa-users"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- FILTROS -->
-                <div style="background: white; padding: 15px; border-radius: 15px; box-shadow: var(--shadow); margin-bottom: 20px;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-                        <div>
-                            <label style="display: block; margin-bottom: 5px; font-weight: 700; color: var(--dark); font-size: 14px;">Status:</label>
-                            <select id="filterStatus" style="padding: 10px 15px; border: 2px solid #dee2e6; border-radius: 10px; font-size: 14px; min-width: 150px;">
-                                <option value="todos">Todos</option>
-                                <option value="pendente">Pendentes</option>
-                                <option value="atrasado">Em Atraso</option>
-                                <option value="pago">Pagos</option>
-                                <option value="parcial">Parcialmente Pagos</option>
-                            </select>
-                        </div>
-                        
-                        <div style="flex: 1; min-width: 200px;">
-                            <input type="text" id="searchCliente" placeholder="Buscar cliente..." style="width: 100%; padding: 10px 15px; border: 2px solid #dee2e6; border-radius: 10px; font-size: 14px;">
-                        </div>
-                        
-                        <button class="btn-primary" id="btnExportFiados" style="padding: 10px 20px; font-size: 14px;">
-                            <i class="fas fa-file-export"></i> Exportar
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- LISTA DE FIADOS -->
-                <div style="background: white; padding: 20px; border-radius: 15px; box-shadow: var(--shadow);">
-                    <div id="fiadosList" class="loading">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Carregando fiados...</p>
                     </div>
                 </div>
             </section>
@@ -632,142 +514,8 @@
         </div>
     </div>
     
-    <!-- MODAL FIADO -->
-    <div class="modal-overlay" id="fiadoModal">
-        <div class="modal" style="max-width: 600px;">
-            <div style="padding: 20px; background: linear-gradient(135deg, #FF7BAC, #FF4081); color: white; border-radius: 15px 15px 0 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-hand-holding-usd"></i>
-                        <span id="modalFiadoTitle">Novo Fiado</span>
-                    </div>
-                    <button id="closeFiadoModal" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
-                        &times;
-                    </button>
-                </div>
-            </div>
-            
-            <div style="padding: 20px;">
-                <form id="fiadoForm">
-                    <input type="hidden" id="fiadoIndex">
-                    
-                    <div class="form-group">
-                        <label class="form-label">Nome do Cliente *</label>
-                        <input type="text" id="nomeCliente" class="form-input" placeholder="Nome completo" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Telefone</label>
-                        <input type="text" id="telefoneCliente" class="form-input" placeholder="(11) 99999-9999">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Produtos *</label>
-                        <div id="produtosFiadoContainer">
-                            <!-- Produtos serão adicionados dinamicamente -->
-                        </div>
-                        <button type="button" class="btn-primary" id="addProdutoFiado" style="margin-top: 10px; padding: 8px 15px; font-size: 14px;">
-                            <i class="fas fa-plus"></i> Adicionar Produto
-                        </button>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Prazo de Pagamento *</label>
-                        <input type="date" id="prazoPagamento" class="form-input" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Data de Retirada</label>
-                        <input type="date" id="dataRetirada" class="form-input">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Valor Pago Inicial (se houver)</label>
-                        <input type="number" id="valorPago" class="form-input" step="0.01" min="0" value="0">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Observações</label>
-                        <textarea id="observacoes" class="form-input" rows="3" placeholder="Observações importantes..."></textarea>
-                    </div>
-                    
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: 700;">
-                            <span>Total:</span>
-                            <span id="fiadoTotal">R$ 0,00</span>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            
-            <div style="padding: 15px 20px; border-top: 2px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn-primary" id="cancelFiadoModal" style="background: var(--gray); padding: 10px 20px;">
-                    Cancelar
-                </button>
-                <button class="btn-primary" id="saveFiado" style="padding: 10px 20px;">
-                    Salvar Fiado
-                </button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- MODAL PAGAMENTO FIADO -->
-    <div class="modal-overlay" id="pagamentoModal">
-        <div class="modal" style="max-width: 500px;">
-            <div style="padding: 20px; background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white; border-radius: 15px 15px 0 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-money-bill-wave"></i>
-                        <span>Registrar Pagamento</span>
-                    </div>
-                    <button onclick="fecharPagamentoModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
-                        &times;
-                    </button>
-                </div>
-            </div>
-            
-            <div style="padding: 20px;">
-                <div id="pagamentoInfo" style="margin-bottom: 20px;"></div>
-                
-                <div class="form-group">
-                    <label class="form-label">Valor do Pagamento *</label>
-                    <input type="number" id="valorPagamento" class="form-input" step="0.01" min="0" placeholder="0.00" required>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Data do Pagamento</label>
-                    <input type="date" id="dataPagamento" class="form-input">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Forma de Pagamento</label>
-                    <select id="formaPagamento" class="form-input">
-                        <option value="dinheiro">Dinheiro</option>
-                        <option value="pix">PIX</option>
-                        <option value="cartao">Cartão</option>
-                        <option value="transferencia">Transferência</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Observações</label>
-                    <textarea id="obsPagamento" class="form-input" rows="2" placeholder="Observações sobre o pagamento..."></textarea>
-                </div>
-            </div>
-            
-            <div style="padding: 15px 20px; border-top: 2px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn-primary" onclick="fecharPagamentoModal()" style="background: var(--gray); padding: 10px 20px;">
-                    Cancelar
-                </button>
-                <button class="btn-primary" onclick="confirmarPagamento()" style="padding: 10px 20px;">
-                    Registrar Pagamento
-                </button>
-            </div>
-        </div>
-    </div>
-    
     <!-- NOTIFICAÇÕES -->
     <div class="notification" id="notification"></div>
 
 </body>
-</html> 
+</html>
