@@ -1,4 +1,4 @@
-// api/neon.js - VERSÃO SEM FIADO
+// api/neon.js - VERSÃO CORRIGIDA
 import { neon } from '@neondatabase/serverless';
 
 // Configuração do banco de dados
@@ -44,6 +44,12 @@ export default async function handler(req, res) {
                 break;
 
             case 'get_produto':
+                if (!data?.id) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'ID do produto não informado'
+                    });
+                }
                 result = await sql`
                     SELECT * FROM produtos 
                     WHERE id = ${data.id}
@@ -51,11 +57,18 @@ export default async function handler(req, res) {
                 break;
 
             case 'create_produto':
+                if (!data?.nome) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Nome do produto não informado'
+                    });
+                }
+
                 result = await sql`
-                    INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo)
-                    VALUES (${data.nome}, ${data.descricao}, ${data.preco}, 
-                            ${data.estoque}, ${data.emoji}, ${data.cor}, 
-                            ${data.ativo})
+                    INSERT INTO produtos (nome, descricao, preco, estoque, emoji, cor, ativo, foto)
+                    VALUES (${data.nome}, ${data.descricao || ''}, ${data.preco || 0}, 
+                            ${data.estoque || 0}, ${data.emoji || '🍦'}, ${data.cor || '#36B5B0'}, 
+                            ${data.ativo !== false}, ${data.foto || null})
                     RETURNING *
                 `;
                 break;
@@ -67,24 +80,7 @@ export default async function handler(req, res) {
                         error: 'ID do produto não informado'
                     });
                 }
-                // Adicione este case no switch do neon.js:
 
-            case 'get_itens_venda':
-                if (!data?.id) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'ID da venda não informado'
-                    });
-                }
-                
-                result = await sql`
-                    SELECT vi.*, p.nome as produto_nome, p.emoji as produto_emoji
-                    FROM venda_itens vi
-                    LEFT JOIN produtos p ON vi.produto_id = p.id
-                    WHERE vi.venda_id = ${data.id}
-                    ORDER BY vi.id
-                `;
-                break;
                 // Construir query dinamicamente para evitar campos undefined
                 const updateFields = [];
                 const updateValues = [];
@@ -116,6 +112,10 @@ export default async function handler(req, res) {
                 if (data.ativo !== undefined) {
                     updateFields.push('ativo');
                     updateValues.push(data.ativo);
+                }
+                if (data.foto !== undefined) {
+                    updateFields.push('foto');
+                    updateValues.push(data.foto);
                 }
 
                 if (updateFields.length === 0) {
@@ -223,7 +223,7 @@ export default async function handler(req, res) {
                     await sql`
                         UPDATE produtos
                         SET estoque = estoque - ${item.quantidade}
-                        WHERE id = ${item.produto_id} AND estoque >= ${item.quantidade}
+                        WHERE id = ${item.produto_id}
                     `;
                 }
 
@@ -241,6 +241,23 @@ export default async function handler(req, res) {
                     GROUP BY v.id
                     ORDER BY v.hora DESC
                     LIMIT 10
+                `;
+                break;
+
+            case 'get_itens_venda':
+                if (!data?.id) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'ID da venda não informado'
+                    });
+                }
+                
+                result = await sql`
+                    SELECT vi.*, p.nome as produto_nome, p.emoji as produto_emoji, p.cor as produto_cor
+                    FROM venda_itens vi
+                    LEFT JOIN produtos p ON vi.produto_id = p.id
+                    WHERE vi.venda_id = ${data.id}
+                    ORDER BY vi.id
                 `;
                 break;
 
@@ -297,9 +314,16 @@ export default async function handler(req, res) {
                 break;
 
             case 'get_relatorio_completo':
+                // Total de vendas
                 const totalVendasTotal = await sql`SELECT COUNT(*) as total FROM vendas`;
+                
+                // Total de produtos ativos
                 const totalProdutos = await sql`SELECT COUNT(*) as total FROM produtos WHERE ativo = true`;
+                
+                // Faturamento total
                 const totalFaturamento = await sql`SELECT COALESCE(SUM(total), 0) as total FROM vendas`;
+                
+                // Vendas recentes
                 const vendasRecentes = await sql`
                     SELECT v.*, 
                            COUNT(vi.id) as total_itens
