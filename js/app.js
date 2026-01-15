@@ -81,6 +81,73 @@ function navigateTo(pageId) {
     }
 }
 
+// ===== FUNÇÕES DE FOTO DO PRODUTO =====
+function setupPhotoUpload() {
+    const uploadBtn = document.getElementById('photoUploadContainer');
+    const fileInput = document.getElementById('productPhoto');
+    const preview = document.getElementById('photoPreview');
+    
+    if (!uploadBtn || !fileInput || !preview) return;
+    
+    // Abrir seletor de arquivo ao clicar
+    uploadBtn.addEventListener('click', function() {
+        fileInput.click();
+    });
+    
+    // Mostrar preview quando selecionar arquivo
+    fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            // Verificar tamanho (max 2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                showNotification('❌ A imagem deve ter no máximo 2MB', 'error');
+                this.value = '';
+                return;
+            }
+            
+            // Verificar se é imagem
+            if (!file.type.match('image.*')) {
+                showNotification('❌ Selecione apenas imagens (JPG, PNG)', 'error');
+                this.value = '';
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+                preview.classList.add('show');
+                showNotification('✅ Foto carregada com sucesso', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+}
+
+function removerFotoProduto() {
+    const preview = document.getElementById('photoPreview');
+    const fileInput = document.getElementById('productPhoto');
+    
+    if (preview) {
+        preview.src = '';
+        preview.classList.remove('show');
+    }
+    
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    
+    showNotification('🗑️ Foto removida', 'info');
+}
+
+function convertFileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+}
+
 // ===== FUNÇÕES DE MODAL DE PRODUTO =====
 function abrirModalProduto(produto = null) {
     try {
@@ -91,6 +158,8 @@ function abrirModalProduto(produto = null) {
         }
         
         const title = document.getElementById('modalTitle');
+        const preview = document.getElementById('photoPreview');
+        const fileInput = document.getElementById('productPhoto');
         
         if (produto) {
             // Modo edição
@@ -104,6 +173,16 @@ function abrirModalProduto(produto = null) {
             document.getElementById('selectedEmoji').textContent = produto.emoji || '🍦';
             document.getElementById('productColor').value = produto.cor || '#36B5B0';
             document.getElementById('productActive').checked = produto.ativo !== false;
+            
+            // Limpar foto anterior
+            if (preview) {
+                preview.src = '';
+                preview.classList.remove('show');
+            }
+            if (fileInput) {
+                fileInput.value = '';
+            }
+            
         } else {
             // Modo novo produto
             title.textContent = 'Novo Produto';
@@ -113,6 +192,15 @@ function abrirModalProduto(produto = null) {
             document.getElementById('productEmoji').value = '🍦';
             document.getElementById('productColor').value = '#36B5B0';
             document.getElementById('productActive').checked = true;
+            
+            // Limpar foto
+            if (preview) {
+                preview.src = '';
+                preview.classList.remove('show');
+            }
+            if (fileInput) {
+                fileInput.value = '';
+            }
         }
         
         modal.classList.add('active');
@@ -157,6 +245,20 @@ async function salvarProduto() {
             return;
         }
         
+        // Pegar foto se existir
+        const fileInput = document.getElementById('productPhoto');
+        let fotoBase64 = null;
+        
+        if (fileInput && fileInput.files[0]) {
+            try {
+                const file = fileInput.files[0];
+                fotoBase64 = await convertFileToBase64(file);
+            } catch (error) {
+                console.error('Erro ao converter foto:', error);
+                showNotification('⚠️ Erro ao processar foto', 'warning');
+            }
+        }
+        
         const produtoData = {
             nome: nome,
             descricao: document.getElementById('productDescription').value.trim(),
@@ -166,6 +268,11 @@ async function salvarProduto() {
             cor: document.getElementById('productColor').value || '#36B5B0',
             ativo: document.getElementById('productActive').checked
         };
+        
+        // Adicionar foto se existir
+        if (fotoBase64) {
+            produtoData.foto = fotoBase64;
+        }
         
         showNotification('🔄 Salvando produto...', 'info');
         
@@ -327,6 +434,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         `).join('');
     }
     
+    // ===== CONFIGURAR UPLOAD DE FOTO =====
+    setupPhotoUpload();
+    
     // ===== TESTAR CONEXÃO E CARREGAR DADOS INICIAIS =====
     try {
         showNotification('🔌 Conectando ao servidor...', 'info');
@@ -359,3 +469,4 @@ window.formatarData = formatarData;
 window.showNotification = showNotification;
 window.neonAPI = neonAPI;
 window.syncData = syncData;
+window.removerFotoProduto = removerFotoProduto;
